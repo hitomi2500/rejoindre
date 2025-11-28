@@ -8,15 +8,25 @@ vdp1_cmdt_list_t *_cmdt_list;
 void video_vdp1_init(video_screen_mode_t screen_mode)
 {
     int *_pointer32;
+    int index;
+    int base;
 
     //-------------- setup VDP1 -------------------
+    //trimming to support only EDTV or normal 320x240 mode
     //setting up a small VDP1 list with 3 commands: sys clip, local coords, end
-    //everything else will be appended to this list later
+    //VDP1 list structure:
+    // 0 : SysClip
+    // 1 : Local Coord
+    // 2-3 : borders (with timer?)
+    // 4-9 : reserved
+    // 10-129 : tiles sprite, max 120, short-circuit unused with jumps
+    // 130-199 : special effects for super moves etc, shortcircuited when unnecessary
+    // 200 : cursor
+    // 201 : character dialogue line, jump to 10
+    // 202 : end
     _cmdt_list = vdp1_cmdt_list_alloc(VIDEO_VDP1_ORDER_LIMIT+1);
 
-    static const int16_vec2_t local_coord_ul =
-        INT16_VEC2_INITIALIZER(0,
-                               0);
+    static const int16_vec2_t local_coord_ul = INT16_VEC2_INITIALIZER(0,0);
 
     static const vdp1_cmdt_draw_mode_t sprite_draw_mode = {
         .raw = 0x0000,
@@ -29,8 +39,8 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
 
     (void)memset(_cmdt_list->cmdts, 0x00, sizeof(vdp1_cmdt_t) * (VIDEO_VDP1_ORDER_LIMIT+1));
 
-    vdp1_vram_partitions_set(64,//VDP1_VRAM_DEFAULT_CMDT_COUNT,
-                              0x7F000, //  VDP1_VRAM_DEFAULT_TEXTURE_SIZE,
+    vdp1_vram_partitions_set(256,//VDP1_VRAM_DEFAULT_CMDT_COUNT,
+                              0x7C000, //  VDP1_VRAM_DEFAULT_TEXTURE_SIZE,
                                0,//  VDP1_VRAM_DEFAULT_GOURAUD_COUNT,
                                0);//  VDP1_VRAM_DEFAULT_CLUT_COUNT);
 
@@ -39,45 +49,80 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
 
     _cmdt_list->count = VIDEO_VDP1_ORDER_LIMIT+1;
     
-    //setting clipping coordinates
+    //command 0 : clipping coordinates
     vdp1_cmdt_system_clip_coord_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_SYSTEM_CLIP_COORDS_INDEX]);
     vdp1_cmdt_t *cmdt_system_clip_coords;
     cmdt_system_clip_coords = &_cmdt_list->cmdts[VIDEO_VDP1_ORDER_SYSTEM_CLIP_COORDS_INDEX];
-    cmdt_system_clip_coords->cmd_xc = (VIDEO_X_RESOLUTION_320 == screen_mode.x_res) ? 319 : 351;
-    cmdt_system_clip_coords->cmd_yc = (VDP2_TVMD_VERT_224 == screen_mode.y_res) ? 224 : 
-                                                (VDP2_TVMD_VERT_240 == screen_mode.y_res) ? 240 : 256;
-
+    cmdt_system_clip_coords->cmd_xc = 319;
+    cmdt_system_clip_coords->cmd_yc = 239;
+    //command 1 : 1 : Local Coord
     vdp1_cmdt_local_coord_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_LOCAL_COORDS_INDEX]);
     vdp1_cmdt_vtx_local_coord_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_LOCAL_COORDS_INDEX], local_coord_ul);
-    
-    //setting up VDP1 text layer quads
-    //there are from 1 to 4 quads required depending on X and Y resolution configuration
-    //VDP1 quads can't be bigger than 508, thus for high-res X (640 or 704) we use 2 quads along X axis
-    //for 480p VDP1 outputs 1 half-resolution progressive frame at 50/60 fps, using 2 quads along Y axis
-    //for 480i VDP1 outputs 2 different fields at 25/30 fps each, using 2 quads along Y axis
-    //for 240p VDP1 outputs 1 progressive frame at 50/60 fps, using 1 quad along Y axis
 
-    //quad for text, always 320x224 and always centered 
-    int index = VIDEO_VDP1_ORDER_TEXT_SPRITE_0_INDEX; 
+    //command 2 : left border, distorted sprite : 8x240 -> 32x240, storing at +0
+    index = 2;
+    base = vdp1_vram_partitions.texture_base;
+    vdp1_cmdt_scaled_sprite_set(&_cmdt_list->cmdts[index]);
+    vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
+    vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
+    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    _cmdt_list->cmdts[index].cmd_xa= 0;
+    _cmdt_list->cmdts[index].cmd_ya= 0;
+    _cmdt_list->cmdts[index].cmd_xc= 31;
+    _cmdt_list->cmdts[index].cmd_yc= 239;
+    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
+    _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
+    //filling with black
+    memset(base,1,8*240);
+
+    //command 3 : right border, distorted sprite : 8x240 -> 64x240, storing at +0x800
+    index = 3;
+    base = vdp1_vram_partitions.texture_base+0x800;
+    vdp1_cmdt_scaled_sprite_set(&_cmdt_list->cmdts[index]);
+    vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
+    vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
+    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    _cmdt_list->cmdts[index].cmd_xa= 288;
+    _cmdt_list->cmdts[index].cmd_ya= 0;
+    _cmdt_list->cmdts[index].cmd_xc= 288+31;
+    _cmdt_list->cmdts[index].cmd_yc= 239;
+    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
+    _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
+    //filling with black
+    memset(base,1,8*240);
+    //jummping to 200
+    vdp1_cmdt_link_type_set(&_cmdt_list->cmdts[index],VDP1_CMDT_LINK_TYPE_JUMP_ASSIGN);
+    vdp1_cmdt_link_set(&_cmdt_list->cmdts[index],200);
+
+    //command 200 : cursor, normal : 32x32, storing at +0x1000
+    index = 200;
+    base = vdp1_vram_partitions.texture_base+0x1000;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
-    _cmdt_list->cmdts[index].cmd_xa= (VIDEO_X_RESOLUTION_320 == screen_mode.x_res) ? 0 : 16;
-    _cmdt_list->cmdts[index].cmd_ya= (VDP2_TVMD_VERT_224 == screen_mode.y_res) ? 0 : 
-                                                (VDP2_TVMD_VERT_240 == screen_mode.y_res) ? 8 : 16;
-    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],vdp1_vram_partitions.texture_base);
-    _cmdt_list->cmdts[index].cmd_size=((320/8)<<8)|(224);
-
-    //quad for shadowdrop test, 32x32, out-of-screen, storing after text quad at 0x11800
-    index = VIDEO_VDP1_ORDER_TEXT_SPRITE_1_INDEX; 
+    _cmdt_list->cmdts[index].cmd_xa= 100;
+    _cmdt_list->cmdts[index].cmd_ya= 100;
+    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
+    _cmdt_list->cmdts[index].cmd_size=((32/8)<<8)|(32);
+    //filling with black
+    memset(base,0,32*32);
+    
+    //command 201 : character message : 256x32, storing at +0x1000
+    index = 201;
+    base = vdp1_vram_partitions.texture_base+0x1000;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
+    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
-    _cmdt_list->cmdts[index].cmd_xa = -40;
-    _cmdt_list->cmdts[index].cmd_ya = -40;
-    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],vdp1_vram_partitions.texture_base+0x11800);
-    _cmdt_list->cmdts[index].cmd_size=((32/8)<<8)|(32);
+    _cmdt_list->cmdts[index].cmd_xa= (320-256)/2;
+    _cmdt_list->cmdts[index].cmd_ya= 180;
+    vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
+    _cmdt_list->cmdts[index].cmd_size=((256/8)<<8)|(32);
+    //filling with black
+    memset(base,0,256*32);
 
     //end of commands list
     vdp1_cmdt_end_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_LIMIT]);
