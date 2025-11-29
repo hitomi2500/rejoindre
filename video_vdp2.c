@@ -291,7 +291,7 @@ void video_vdp2_init(video_screen_mode_t screen_mode, bitmap_mode_t bmp_mode)
                 bmp_format.ccc = VDP2_SCRN_CCC_PALETTE_256;
                 bmp_format.bitmap_size = VDP2_SCRN_BITMAP_SIZE_512X512;
             }
-            bmp_format.palette_base = 0x400;
+            bmp_format.palette_base = 0;
             bmp_format.bitmap_base = VIDEO_VDP2_NBG0_SPECIAL_BMP_START;
             vdp2_scrn_bitmap_format_set(&bmp_format);
 
@@ -678,13 +678,6 @@ void video_vdp2_set_palette_part(int number, rgb888_t *pointer, int start, int e
             uint32_t color = (pointer[i-start].cc & 0x1)<<15 | (((uint32_t)(pointer[i-start].b & 0xF8))<<7) | (((uint32_t)(pointer[i-start].g & 0xF8))<<2) | (((uint32_t)(pointer[i-start].r & 0xF8))>>3);
             my_vdp2_cram16[i] = color;
         }
-        /*my_vdp2_cram8 = (uint8_t *)VDP2_CRAM_ADDR(0x800 + 0x100 * number);
-        my_vdp2_cram16 = (uint16_t *)my_vdp2_cram8;
-        for (int i = start; i <= end; i++)
-        {
-            uint32_t color = (pointer[i-start].cc & 0x1)<<15 | (((uint32_t)(pointer[i-start].b & 0xF8))<<7) | (((uint32_t)(pointer[i-start].g & 0xF8))<<2) | (((uint32_t)(pointer[i-start].r & 0xF8))>>3);
-            my_vdp2_cram16[i] = color;
-        }*/
     }
     else
     {

@@ -1,0 +1,1 @@
+void battle_init(uint8_t * tga);

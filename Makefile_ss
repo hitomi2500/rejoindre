@@ -14,6 +14,7 @@ BUILTIN_ASSETS+= \
 SH_PROGRAM:= rejoindre
 SH_SRCS:= \
 	main.c \
+	battle.c \
 	video_vdp1.c \
 	video_vdp2.c \
 	video.c
