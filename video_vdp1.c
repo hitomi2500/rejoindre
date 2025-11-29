@@ -73,8 +73,8 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     _cmdt_list->cmdts[index].cmd_yc= 239;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
     _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
-    //filling with black
-    memset(base,1,8*240);
+    //filling with transparent
+    memset(base,0,8*240);
 
     //command 3 : right border, distorted sprite : 8x240 -> 64x240, storing at +0x800
     index = 3;
@@ -90,38 +90,58 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     _cmdt_list->cmdts[index].cmd_yc= 239;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
     _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
-    //filling with black
-    memset(base,1,8*240);
-    //jummping to 200
+    //filling with transparent
+    memset(base,0,8*240);
+    //jummping to 10 ,skipping currenty reserved 4-9
     vdp1_cmdt_link_type_set(&_cmdt_list->cmdts[index],VDP1_CMDT_LINK_TYPE_JUMP_ASSIGN);
-    vdp1_cmdt_link_set(&_cmdt_list->cmdts[index],200);
+    vdp1_cmdt_link_set(&_cmdt_list->cmdts[index],10);
+
+    //commands 10 thru 129: tiles, each tile is 40x30 = 0x4B0 bytes, reserving 0x500, storing at +0x4000
+    for (int index = 10; index<130; index++)
+    {
+        base = vdp1_vram_partitions.texture_base + 0x4000 + (index-10)*0x500;
+        vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
+        vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
+        _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
+        vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+        _cmdt_list->cmdts[index].cmd_xa= ((index-10)%10)*42;
+        _cmdt_list->cmdts[index].cmd_ya= ((index-10)/10)*32;
+        vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
+        _cmdt_list->cmdts[index].cmd_size=((40/8)<<8)|(30);
+        //filling with transparent
+        memset(base,0,40*30);
+    }
+
+    //jumping from 129 to 200 ,skipping special effect sprites for now
+    vdp1_cmdt_link_type_set(&_cmdt_list->cmdts[129],VDP1_CMDT_LINK_TYPE_JUMP_ASSIGN);
+    vdp1_cmdt_link_set(&_cmdt_list->cmdts[129],200);
 
     //command 200 : cursor, normal : 32x32, storing at +0x1000
     index = 200;
     base = vdp1_vram_partitions.texture_base+0x1000;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
-    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 100;
     _cmdt_list->cmdts[index].cmd_ya= 100;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
     _cmdt_list->cmdts[index].cmd_size=((32/8)<<8)|(32);
-    //filling with black
+    //filling with transparent
     memset(base,0,32*32);
     
-    //command 201 : character message : 256x32, storing at +0x1000
+    //command 201 : character message : 256x32, storing at +0x1400
     index = 201;
-    base = vdp1_vram_partitions.texture_base+0x1000;
+    base = vdp1_vram_partitions.texture_base+0x1400;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
-    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= (320-256)/2;
     _cmdt_list->cmdts[index].cmd_ya= 180;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
     _cmdt_list->cmdts[index].cmd_size=((256/8)<<8)|(32);
-    //filling with black
+    //filling with transparent
     memset(base,0,256*32);
 
     //end of commands list
