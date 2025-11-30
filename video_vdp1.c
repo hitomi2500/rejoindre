@@ -75,7 +75,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
     _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
     //filling with black
-    memset(base,0,8*240);
+    memset(base,23,8*240);
 
     //command 3 : right border, distorted sprite : 8x240 -> 64x240, storing at +0x800
     index = 3;
