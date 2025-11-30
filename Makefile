@@ -9,7 +9,8 @@ include $(YAUL_INSTALL_ROOT)/share/build.tga.mk
 
 # Each asset follows the format: <path>;<symbol>. Duplicates are removed
 BUILTIN_ASSETS+= \
-	assets/BITMAP.TGA;asset_bitmap_tga
+	assets/BITMAP.TGA;asset_bitmap_tga \
+	assets/BITMAP2.TGA;asset_bitmap2_tga
 
 SH_PROGRAM:= rejoindre
 SH_SRCS:= \
