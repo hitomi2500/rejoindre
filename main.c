@@ -6,9 +6,7 @@
  */
 
 #include <yaul.h>
-
 #include <tga.h>
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +19,8 @@ extern uint8_t asset_bitmap2_tga[];
 static void rejoindre_vblank_out_handler(void *work __unused);
 
 int global_frame_count = 0;
+
+smpc_peripheral_digital_t controller;
 
 int
 main(void)
@@ -40,6 +40,8 @@ main(void)
 
 	vdp_sync_vblank_out_set(rejoindre_vblank_out_handler, NULL);
 
+	smpc_peripheral_init();
+
 	//vdp1_sync_mode_set(VDP1_SYNC_MODE_ERASE_CHANGE);
     //vdp1_sync_interval_set(2);
  
@@ -55,12 +57,15 @@ main(void)
 
 	int divider = 0;
 	while (true) {
-		divider++;
-		if (divider > 3)
-		{
-			divider = 0;
-			battle_scheduler();
-		}
+		smpc_peripheral_process();
+		get_digital_keypress_anywhere(&controller);
+
+		//divider++;
+		//if (divider > 3)
+		//{
+		//	divider = 0;
+			battle_scheduler(&controller);
+		//}
 		vdp2_sync();
     	vdp2_sync_wait();
     }
@@ -70,21 +75,6 @@ main(void)
 
 static void rejoindre_vblank_out_handler(void *work __unused)
 {
-	static int vdp1_state_counter = 0;
     global_frame_count++;
-
-	/*switch (vdp1_state_counter) {
-		case 0:
-			vdp1_sync_mode_set(VDP1_SYNC_MODE_ERASE_CHANGE);
-			break;
-		case 1:
-			vdp1_sync_mode_set(VDP1_SYNC_MODE_ERASE_CHANGE);
-			break;
-	}*/
-
-	vdp1_state_counter++;
-	if (vdp1_state_counter == 2)
-		vdp1_state_counter = 0;
-    
-    //smpc_peripheral_intback_issue();
+    smpc_peripheral_intback_issue();
 }

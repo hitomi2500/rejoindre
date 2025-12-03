@@ -50,10 +50,19 @@ int Curves_Y[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 
 extern vdp1_cmdt_list_t *_cmdt_list;
 
+int battle_cursor_x;
+int battle_cursor_y;
+
+extern uint8_t asset_cursor1_tga[];
+extern uint8_t asset_cursor2_tga[];
+
+int battle_cursor_history[16] = {0};
+
+vdp1_vram_partitions_t battle_vdp1_vram_partitions;
+
 void battle_init(uint8_t * tga, uint8_t * tga_half)
 {
-    vdp1_vram_partitions_t vdp1_vram_partitions;
-    vdp1_vram_partitions_get(&vdp1_vram_partitions);
+    vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
 
     //step 1 - load tga into VDP2 megaplane
     memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
@@ -271,7 +280,7 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 
             //now applying mask image for VDP1 sprites
             for (int yy=0;yy<30;yy++) {
-                uint8_t * sprite_dst = (uint8_t *) (vdp1_vram_partitions.texture_base + 0x4000 + sprite*0x500 + yy*40);
+                uint8_t * sprite_dst = (uint8_t *) (battle_vdp1_vram_partitions.texture_base + 0x4000 + sprite*0x500 + yy*40);
                 uint8_t * sprite_src = (uint8_t *) &tga_half[18+256*3+(y*20+yy-5)*256+x*25-7];
                 int y_index = yy*40;
                 for (int xx=0;xx<40;xx++)
@@ -291,27 +300,89 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             sprite++;
         }
     }
+
+    //cursor stuff 
+    battle_cursor_x = 128;
+    battle_cursor_y = 120;
+    memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor1_tga[18+3*3]),32*32);
+    _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
+    _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
+
+    //cursor palette
+	for (int i = 0; i<3; i++)
+    {
+        _color.r = asset_cursor1_tga[18+i*3+2];
+        _color.g = asset_cursor1_tga[18+i*3+1];
+        _color.b = asset_cursor1_tga[18+i*3+0];
+        video_vdp2_set_palette_part(3, &_color, i, i);
+    }
+
+    //update vdp1
+    vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }
 
 
-void battle_scheduler()
+void battle_scheduler(smpc_peripheral_digital_t * controller)
 {
+    //cursor movement
+    if(controller->pressed.button.up) {
+        battle_cursor_y -= 2;
+        battle_cursor_y -= (battle_cursor_history[0] > 5) ? 2 : 0;
+        if (battle_cursor_y < 2) battle_cursor_y  = 2;
+        battle_cursor_history[0]++;
+    } else
+        battle_cursor_history[0] = 0;
+    if(controller->pressed.button.down) {
+        battle_cursor_y += 2;
+        battle_cursor_y += (battle_cursor_history[1] > 5) ? 2 : 0;
+        if (battle_cursor_y > 234) battle_cursor_y  = 234;
+        battle_cursor_history[1]++;
+    } else
+        battle_cursor_history[1] = 0;
+    if(controller->pressed.button.left) {
+        battle_cursor_x -= 2;
+        battle_cursor_x -= (battle_cursor_history[2] > 5) ? 2 : 0;
+        if (battle_cursor_x < -8) battle_cursor_x  = -8;
+        battle_cursor_history[2]++;
+    } else
+        battle_cursor_history[2] = 0;
+    if(controller->pressed.button.right) {
+        battle_cursor_x += 2;
+        battle_cursor_x += (battle_cursor_history[3] > 5) ? 2 : 0;
+        if (battle_cursor_x > 304) battle_cursor_x  = 304;
+        battle_cursor_history[3]++;
+    } else
+        battle_cursor_history[3] = 0;
+    _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
+    _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
+    
+    //cursor action
+    if ( (controller->pressed.button.a) || (controller->pressed.button.c) ) {
+        if (0 == battle_cursor_history[5])
+            memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor2_tga[18+3*3]),32*32);
+        battle_cursor_history[5]++;
+    } else {
+        if (battle_cursor_history[5])
+            memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor1_tga[18+3*3]),32*32);
+        battle_cursor_history[5] = 0;
+    }
+
     //using random shifts for every tile
-    int x,y;
+    /*int x,y;
     uint16_t buf;
     for (int tile=0;tile<(GRID_SIZE_Y*GRID_SIZE_X); tile++)
     {
         buf = _cmdt_list->cmdts[10+tile].cmd_xa;
-        buf += ((rand()&0x7)-4);
+        buf += ((rand()&0x7)-4) + shift_x;
         if (buf < 0) buf = 0;
         if (buf > 320) buf = 320;
         _cmdt_list->cmdts[10+tile].cmd_xa = buf;
 
         buf = _cmdt_list->cmdts[10+tile].cmd_ya;
-        buf += ((rand()&0x7)-4);
+        buf += ((rand()&0x7)-4) + shift_y;
         if (buf < 0) buf = 0;
         if (buf > 240) buf = 240;
         _cmdt_list->cmdts[10+tile].cmd_ya = buf;
-    }
+    }*/
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }

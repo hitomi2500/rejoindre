@@ -137,11 +137,12 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
 
     //command 200 : cursor, normal : 32x32, storing at +0x1000
     index = 200;
+    font_color_bank.raw = 0x300;//using special palette for cursor
     base = vdp1_vram_partitions.texture_base+0x1000;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);
     _cmdt_list->cmdts[index].cmd_xa= 100;
     _cmdt_list->cmdts[index].cmd_ya= 100;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
@@ -151,6 +152,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     
     //command 201 : character message : 256x32, storing at +0x1400
     index = 201;
+    font_color_bank.raw = 0x200;//using special palette for effects
     base = vdp1_vram_partitions.texture_base+0x1400;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);

@@ -10,11 +10,14 @@ include $(YAUL_INSTALL_ROOT)/share/build.tga.mk
 # Each asset follows the format: <path>;<symbol>. Duplicates are removed
 BUILTIN_ASSETS+= \
 	assets/BITMAP.TGA;asset_bitmap_tga \
-	assets/BITMAP2.TGA;asset_bitmap2_tga
+	assets/BITMAP2.TGA;asset_bitmap2_tga \
+	assets/cursor1.tga;asset_cursor1_tga \
+	assets/cursor2.tga;asset_cursor2_tga
 
 SH_PROGRAM:= rejoindre
 SH_SRCS:= \
 	main.c \
+	input.c \
 	battle.c \
 	video_vdp1.c \
 	video_vdp2.c \
