@@ -52,6 +52,8 @@ extern vdp1_cmdt_list_t *_cmdt_list;
 
 int battle_cursor_x;
 int battle_cursor_y;
+int battle_cursor_tile_offset_x;
+int battle_cursor_tile_offset_y;
 
 extern uint8_t asset_cursor1_tga[];
 extern uint8_t asset_cursor2_tga[];
@@ -60,23 +62,33 @@ int battle_cursor_history[16] = {0};
 
 vdp1_vram_partitions_t battle_vdp1_vram_partitions;
 
+int tiles_x[120];
+int tiles_y[120];
+
+int selected_tile = -1;
+
 void battle_init(uint8_t * tga, uint8_t * tga_half)
 {
+    srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
     vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
 
-    //step 1 - load tga into VDP2 megaplane
-    memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
-	memcpy ((void *)VDP2_VRAM_ADDR(2, 0x00000), &(tga[18+256*3]),512*256);
-	memcpy ((void *)VDP2_VRAM_ADDR(1, 0x00000), &(tga[18+256*3+0x20000]),512*256);
-	memcpy ((void *)VDP2_VRAM_ADDR(3, 0x00000), &(tga[18+256*3+0x20000]),512*256);
+    //step 1 - DO NOT load tga into VDP2 megaplane, FILL WITH RANDOM SHIT!
+    //memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(2, 0x00000), &(tga[18+256*3]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(1, 0x00000), &(tga[18+256*3+0x20000]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(3, 0x00000), &(tga[18+256*3+0x20000]),512*256);
+    for (int i=0;i<512*512;i++) {
+        *((uint8_t *)VDP2_VRAM_ADDR(0, i)) = rand();
+        *((uint8_t *)VDP2_VRAM_ADDR(2, i)) = rand();
+    }
 
 	rgb888_t _color  = {0,0,0,0};
 	for (int i = 0; i<256; i++)
     {
-        _color.r = tga[18+i*3+2]/2;
+        /*_color.r = tga[18+i*3+2]/2;
         _color.g = tga[18+i*3+1]/2;
         _color.b = tga[18+i*3+0]/2;
-        video_vdp2_set_palette_part(1, &_color, i, i);
+        video_vdp2_set_palette_part(1, &_color, i, i);*/
         _color.r = tga[18+i*3+2];
         _color.g = tga[18+i*3+1];
         _color.b = tga[18+i*3+0];
@@ -84,9 +96,6 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     }
 
     //step 2 - generate random curve directions
-
-    srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
-
     for (int y=0;y<(GRID_SIZE_Y-1); y++) {
         for (int x=0;x<(GRID_SIZE_X-1); x++) {
             Curves_X[y][x] = rand();
@@ -296,8 +305,19 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
                             break;
                     }
                 }
-
             sprite++;
+        }
+    }
+
+    //step 4 - assign random coords for every tile
+    int tile = 0;
+    for (int y=0;y<(GRID_SIZE_Y); y++) {
+        for (int x=0;x<(GRID_SIZE_X); x++) {
+            tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
+            tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
+            _cmdt_list->cmdts[10+tile].cmd_xa = tiles_x[tile];
+            _cmdt_list->cmdts[10+tile].cmd_ya = tiles_y[tile];
+            tile++;
         }
     }
 
@@ -324,46 +344,101 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 
 void battle_scheduler(smpc_peripheral_digital_t * controller)
 {
-    //cursor movement
-    if(controller->pressed.button.up) {
-        battle_cursor_y -= 2;
-        battle_cursor_y -= (battle_cursor_history[0] > 5) ? 2 : 0;
-        if (battle_cursor_y < 2) battle_cursor_y  = 2;
-        battle_cursor_history[0]++;
-    } else
-        battle_cursor_history[0] = 0;
-    if(controller->pressed.button.down) {
-        battle_cursor_y += 2;
-        battle_cursor_y += (battle_cursor_history[1] > 5) ? 2 : 0;
-        if (battle_cursor_y > 234) battle_cursor_y  = 234;
-        battle_cursor_history[1]++;
-    } else
-        battle_cursor_history[1] = 0;
-    if(controller->pressed.button.left) {
-        battle_cursor_x -= 2;
-        battle_cursor_x -= (battle_cursor_history[2] > 5) ? 2 : 0;
-        if (battle_cursor_x < -8) battle_cursor_x  = -8;
-        battle_cursor_history[2]++;
-    } else
-        battle_cursor_history[2] = 0;
-    if(controller->pressed.button.right) {
-        battle_cursor_x += 2;
-        battle_cursor_x += (battle_cursor_history[3] > 5) ? 2 : 0;
-        if (battle_cursor_x > 304) battle_cursor_x  = 304;
-        battle_cursor_history[3]++;
-    } else
-        battle_cursor_history[3] = 0;
-    _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
-    _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
+        //cursor or tile movement
+        if(controller->pressed.button.up) {
+            battle_cursor_y -= 2;
+            battle_cursor_y -= (battle_cursor_history[0] > 5) ? 2 : 0;
+            if (battle_cursor_y < 2) battle_cursor_y  = 2;
+            battle_cursor_history[0]++;
+        } else
+            battle_cursor_history[0] = 0;
+        if(controller->pressed.button.down) {
+            battle_cursor_y += 2;
+            battle_cursor_y += (battle_cursor_history[1] > 5) ? 2 : 0;
+            if (battle_cursor_y > 234) battle_cursor_y  = 234;
+            battle_cursor_history[1]++;
+        } else
+            battle_cursor_history[1] = 0;
+        if(controller->pressed.button.left) {
+            battle_cursor_x -= 2;
+            battle_cursor_x -= (battle_cursor_history[2] > 5) ? 2 : 0;
+            if (battle_cursor_x < -8) battle_cursor_x  = -8;
+            battle_cursor_history[2]++;
+        } else
+            battle_cursor_history[2] = 0;
+        if(controller->pressed.button.right) {
+            battle_cursor_x += 2;
+            battle_cursor_x += (battle_cursor_history[3] > 5) ? 2 : 0;
+            if (battle_cursor_x > 304) battle_cursor_x  = 304;
+            battle_cursor_history[3]++;
+        } else
+            battle_cursor_history[3] = 0;
+
+    if (-1 == selected_tile) {
+        //show cursor
+        _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
+        _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
+    } else {
+        //centering tile on cursor hot point
+        tiles_x[selected_tile] = battle_cursor_x + 12 - 20;
+        tiles_y[selected_tile] = battle_cursor_y + 2 - 15;
+        //update tile coord
+        _cmdt_list->cmdts[10+selected_tile].cmd_xa = tiles_x[selected_tile];
+        _cmdt_list->cmdts[10+selected_tile].cmd_ya = tiles_y[selected_tile];
+        //hide cursor
+        _cmdt_list->cmdts[200].cmd_xa = -100;
+        _cmdt_list->cmdts[200].cmd_ya = -100;
+    }
     
-    //cursor action
+    //cursor grab button
     if ( (controller->pressed.button.a) || (controller->pressed.button.c) ) {
-        if (0 == battle_cursor_history[5])
-            memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor2_tga[18+3*3]),32*32);
+        if (0 == battle_cursor_history[5]) {
+            //pressing grab button
+            //searching for nearby tile
+            selected_tile = -1;
+            //cursor hot point is {12;2}
+            int hot_x = battle_cursor_x+12;
+            int hot_y = battle_cursor_y+2;
+            for (int tile=0;tile<120;tile++)
+            {
+                //NOT using mahnattan distance
+                //tile active border is {7,5} - {33,24}
+                /*int abs_x = ((battle_cursor_x+12) > tiles_x[tile]) ? ((battle_cursor_x+12) - tiles_x[tile]) : (tiles_x[tile] - (battle_cursor_x+12));
+                int abs_y = ((battle_cursor_y+2) > tiles_y[tile]) ? ((battle_cursor_y+2) - tiles_y[tile]) : (tiles_y[tile] - (battle_cursor_y+2));
+                if ( (abs_x < 5) && (abs_y < 5) ) */
+                if ( (hot_x >= tiles_x[tile]+7) && (hot_x <= tiles_x[tile]+33) && (hot_y >= tiles_y[tile]+5) && (hot_y <= tiles_y[tile]+24) ){
+                    selected_tile = tile;
+                }
+            }
+            if (-1 == selected_tile) {
+                //no tile found, changing cursor to no go
+                memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor2_tga[18+3*3]),32*32);
+            } else {
+                //tile found, hiding cursor
+                _cmdt_list->cmdts[200].cmd_xa = -100;
+                _cmdt_list->cmdts[200].cmd_ya = -100;
+            }
+        }
         battle_cursor_history[5]++;
     } else {
-        if (battle_cursor_history[5])
+        if (battle_cursor_history[5]) {
+            //checking if sprite is placed correctly
+            int expected_x = (selected_tile%10)*26-20;
+            int expected_y = (selected_tile/10)*20-15;
+            //using mahnattan distance
+            int abs_x = (expected_x > tiles_x[selected_tile]) ? (expected_x - tiles_x[selected_tile]) : (tiles_x[selected_tile] - expected_x);
+            int abs_y = (expected_y > tiles_y[selected_tile]) ? (expected_y - tiles_y[selected_tile]) : (tiles_y[selected_tile] - expected_y);
+            if ( (abs_x < 4) && (abs_y < 4) ){
+                //match, move tile away
+                tiles_x[selected_tile] = -200;
+                tiles_y[selected_tile] = -200;
+                //TODO: update VDP2 layer
+            }
+            //releasing grab button
+            selected_tile = -1;
+            //restore cursor sprite in case it was different
             memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor1_tga[18+3*3]),32*32);
+        }
         battle_cursor_history[5] = 0;
     }
 

@@ -291,7 +291,7 @@ void video_vdp2_init(video_screen_mode_t screen_mode, bitmap_mode_t bmp_mode)
                 bmp_format.ccc = VDP2_SCRN_CCC_PALETTE_256;
                 bmp_format.bitmap_size = VDP2_SCRN_BITMAP_SIZE_512X512;
             }
-            bmp_format.palette_base = 0x200;
+            bmp_format.palette_base = 0;//using same palette as pieces, not 0x200;
             bmp_format.bitmap_base = VIDEO_VDP2_NBG0_SPECIAL_BMP_START;
             vdp2_scrn_bitmap_format_set(&bmp_format);
 
