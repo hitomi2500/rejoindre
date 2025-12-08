@@ -3,6 +3,8 @@
 #include "video.h"
 #include "video_vdp1.h"
 #include "video_vdp2.h"
+#include "font_renderer.h"
+#include "font_pacifico_16.h"
 
 #define GRID_SIZE_X 10
 #define GRID_SIZE_Y 12
@@ -44,7 +46,6 @@ static unsigned char Vertical_Curve_20[200] = {
     0,0,2,1,1,1,1,1,1,1
 };
 
-uint8_t drawarea[40*30];
 int Curves_X[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 int Curves_Y[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 
@@ -67,48 +68,10 @@ int tiles_y[120];
 
 int selected_tile = -1;
 
-void battle_init(uint8_t * tga, uint8_t * tga_half)
+uint8_t * tga_copy;
+
+void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
 {
-    srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
-    vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
-
-    //step 1 - DO NOT load tga into VDP2 megaplane, FILL WITH RANDOM SHIT!
-    //memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
-	//memcpy ((void *)VDP2_VRAM_ADDR(2, 0x00000), &(tga[18+256*3]),512*256);
-	//memcpy ((void *)VDP2_VRAM_ADDR(1, 0x00000), &(tga[18+256*3+0x20000]),512*256);
-	//memcpy ((void *)VDP2_VRAM_ADDR(3, 0x00000), &(tga[18+256*3+0x20000]),512*256);
-    for (int i=0;i<512*512;i++) {
-        *((uint8_t *)VDP2_VRAM_ADDR(0, i)) = rand();
-        *((uint8_t *)VDP2_VRAM_ADDR(2, i)) = rand();
-    }
-
-	rgb888_t _color  = {0,0,0,0};
-	for (int i = 0; i<256; i++)
-    {
-        /*_color.r = tga[18+i*3+2]/2;
-        _color.g = tga[18+i*3+1]/2;
-        _color.b = tga[18+i*3+0]/2;
-        video_vdp2_set_palette_part(1, &_color, i, i);*/
-        _color.r = tga[18+i*3+2];
-        _color.g = tga[18+i*3+1];
-        _color.b = tga[18+i*3+0];
-        video_vdp2_set_palette_part(0, &_color, i, i);
-    }
-
-    //step 2 - generate random curve directions
-    for (int y=0;y<(GRID_SIZE_Y-1); y++) {
-        for (int x=0;x<(GRID_SIZE_X-1); x++) {
-            Curves_X[y][x] = rand();
-            Curves_Y[y][x] = rand();
-        }
-    }
-
-    //step 3 - using downsampled same-palette image to fill VDP1 sprites
-    int sprite = 0;
-    for (int y=0;y<(GRID_SIZE_Y); y++) {
-        for (int x=0;x<(GRID_SIZE_X); x++) {
-
-            //creating mask image first
             //tile size is 26 x 20, tile grid is 10x12, resolution is 260x240
             //cleaning draw area
             memset(drawarea,0,40*30);
@@ -118,11 +81,11 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
                     drawarea[yy*40+xx] = 1;//pixel color
 
             //top curve, excluding top tiles
-            if (y==0) {
+            if (piece_y==0) {
                 for (int xx=7;xx<33;xx++)
                     drawarea[5*40+xx] = 2;//border color
             } else {
-                if (Curves_X[y][x] % 2 == 0) {
+                if (Curves_X[piece_y][piece_x] % 2 == 0) {
                     for (int yy=2;yy<12;yy++)
                         for (int xx=7;xx<33;xx++)
                             switch (Horizontal_Curve_26[(yy-2)*26+(xx-7)]) {
@@ -154,11 +117,11 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             }
 
             //bottom gradient, excluding bottom tiles
-            if (y == (GRID_SIZE_Y-1)) {
+            if (piece_y == (GRID_SIZE_Y-1)) {
                 for (int xx=7;xx<33;xx++)
                     drawarea[24*40+xx] = 2;//border color
             } else {
-                if (Curves_X[y+1][x] % 2 == 0) {
+                if (Curves_X[piece_y+1][piece_x] % 2 == 0) {
                     for (int yy=21;yy<30;yy++)
                         for (int xx=7;xx<33;xx++)
                             switch (Horizontal_Curve_26[(yy-21)*26+(xx-7)]) {
@@ -190,11 +153,11 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             }
 
             //left gradient, excluding left tiles
-            if (x==0) {
+            if (piece_x==0) {
                 for (int yy=5;yy<25;yy++)
                     drawarea[yy*40+7] = 2;//border color
             } else {
-                if (Curves_Y[y][x] % 2 == 0) {
+                if (Curves_Y[piece_y][piece_x] % 2 == 0) {
                     for (int yy=6;yy<24;yy++)
                         for (int xx=5;xx<9;xx++)
                             switch (Vertical_Curve_20[(yy-5)*10+(xx-5)]) {
@@ -239,11 +202,11 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             }
 
             //right gradient, excluding right tiles
-            if (x==(GRID_SIZE_X-1)) {
+            if (piece_x==(GRID_SIZE_X-1)) {
                 for (int yy=5;yy<25;yy++)
                     drawarea[yy*40+33] = 2;//border color
             } else {
-                if (Curves_Y[y][x+1] % 2 == 0) {
+                if (Curves_Y[piece_y][piece_x+1] % 2 == 0) {
                     for (int yy=6;yy<24;yy++)
                         for (int xx=31;xx<40;xx++)
                             switch (Vertical_Curve_20[(yy-4)*10+(xx-40)]) {
@@ -286,6 +249,64 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
                             }
                 }
             }
+}
+
+void mcu_renderer_draw_text(mr_t mr, char * string, const uint8_t * font, mr_rectangle_t rect, mr_color_t color,
+		mr_color_t background_color)
+{
+    mr_set_font(&mr, font);
+    mr_set_fill_color(&mr, background_color);
+    mr_set_stroke_color(&mr, color);
+    mr_point_t offset = (mr_point_t){ (rect.width - mr_get_utf8_text_width(&mr, (uint8_t *)string)) / 2,
+                           (rect.height - mr_get_line_height(&mr)) / 2};
+    mr_draw_utf8_text(&mr,(uint8_t *)string,&rect,&offset);
+}
+
+void battle_init(uint8_t * tga, uint8_t * tga_half)
+{
+    uint8_t drawarea[40*30];
+    tga_copy = tga;
+    srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
+    vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
+
+    //step 1 - DO NOT load tga into VDP2 megaplane, FILL WITH RANDOM SHIT!
+    //memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(2, 0x00000), &(tga[18+256*3]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(1, 0x00000), &(tga[18+256*3+0x20000]),512*256);
+	//memcpy ((void *)VDP2_VRAM_ADDR(3, 0x00000), &(tga[18+256*3+0x20000]),512*256);
+    for (int i=0;i<512*512;i++) {
+        *((uint8_t *)VDP2_VRAM_ADDR(0, i)) = rand();
+        *((uint8_t *)VDP2_VRAM_ADDR(2, i)) = rand();
+    }
+
+	rgb888_t _color  = {0,0,0,0};
+	for (int i = 0; i<256; i++)
+    {
+        /*_color.r = tga[18+i*3+2]/2;
+        _color.g = tga[18+i*3+1]/2;
+        _color.b = tga[18+i*3+0]/2;
+        video_vdp2_set_palette_part(1, &_color, i, i);*/
+        _color.r = tga[18+i*3+2];
+        _color.g = tga[18+i*3+1];
+        _color.b = tga[18+i*3+0];
+        video_vdp2_set_palette_part(0, &_color, i, i);
+    }
+
+    //step 2 - generate random curve directions
+    for (int y=0;y<(GRID_SIZE_Y-1); y++) {
+        for (int x=0;x<(GRID_SIZE_X-1); x++) {
+            Curves_X[y][x] = rand();
+            Curves_Y[y][x] = rand();
+        }
+    }
+
+    //step 3 - using downsampled same-palette image to fill VDP1 sprites
+    int sprite = 0;
+    for (int y=0;y<(GRID_SIZE_Y); y++) {
+        for (int x=0;x<(GRID_SIZE_X); x++) {
+
+            //creating mask image first
+            generate_piece_mask(drawarea,x,y);
 
             //now applying mask image for VDP1 sprites
             for (int yy=0;yy<30;yy++) {
@@ -313,8 +334,10 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     int tile = 0;
     for (int y=0;y<(GRID_SIZE_Y); y++) {
         for (int x=0;x<(GRID_SIZE_X); x++) {
-            tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
-            tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
+            //tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
+            //tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
+            tiles_x[tile] = x*28+60;//((unsigned short)rand()) % 300 - 10;
+            tiles_y[tile] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
             _cmdt_list->cmdts[10+tile].cmd_xa = tiles_x[tile];
             _cmdt_list->cmdts[10+tile].cmd_ya = tiles_y[tile];
             tile++;
@@ -324,11 +347,11 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     //cursor stuff 
     battle_cursor_x = 128;
     battle_cursor_y = 120;
-    memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor1_tga[18+3*3]),32*32);
+    memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor1_tga[18+3*3]),32*32);
     _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
     _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
 
-    //cursor palette
+    //adding cursor colors to palette 3
 	for (int i = 0; i<3; i++)
     {
         _color.r = asset_cursor1_tga[18+i*3+2];
@@ -337,6 +360,33 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
         video_vdp2_set_palette_part(3, &_color, i, i);
     }
 
+    //adding font colors to palette 3 at offset +16
+	for (int i = 0; i<16; i++)
+    {
+        _color.r = i*16;
+        _color.g = i*16;
+        _color.b = i*16;
+        video_vdp2_set_palette_part(3, &_color, 16+i, 16+i);
+    }
+
+    //rendering test text on side bodred
+    char draw_string[32];
+    mr_t mr;
+    mr.display_width = 32;
+	mr.display_height = 20;
+    mr_point_t offset;
+    mr.draw_rectangle_callback = mr_draw_rectangle_framebuffer_color;
+    mr.draw_string_callback = mr_draw_string_framebuffer_color;
+    mr.display = 0;
+    mr.buffer = (uint8_t *)LWRAM(0);
+
+    strcpy (draw_string,"Test");
+    mr_rectangle_t rectangle = (mr_rectangle_t){0,0,32,20};
+   	mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+
+    for (int i = 0; i<32*20; i++)
+        *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
     //update vdp1
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }
@@ -344,6 +394,8 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 
 void battle_scheduler(smpc_peripheral_digital_t * controller)
 {
+    uint8_t drawarea[40*30];
+
         //cursor or tile movement
         if(controller->pressed.button.up) {
             battle_cursor_y -= 2;
@@ -401,18 +453,13 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             int hot_y = battle_cursor_y+2;
             for (int tile=0;tile<120;tile++)
             {
-                //NOT using mahnattan distance
-                //tile active border is {7,5} - {33,24}
-                /*int abs_x = ((battle_cursor_x+12) > tiles_x[tile]) ? ((battle_cursor_x+12) - tiles_x[tile]) : (tiles_x[tile] - (battle_cursor_x+12));
-                int abs_y = ((battle_cursor_y+2) > tiles_y[tile]) ? ((battle_cursor_y+2) - tiles_y[tile]) : (tiles_y[tile] - (battle_cursor_y+2));
-                if ( (abs_x < 5) && (abs_y < 5) ) */
                 if ( (hot_x >= tiles_x[tile]+7) && (hot_x <= tiles_x[tile]+33) && (hot_y >= tiles_y[tile]+5) && (hot_y <= tiles_y[tile]+24) ){
                     selected_tile = tile;
                 }
             }
             if (-1 == selected_tile) {
                 //no tile found, changing cursor to no go
-                memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor2_tga[18+3*3]),32*32);
+                memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor2_tga[18+3*3]),32*32);
             } else {
                 //tile found, hiding cursor
                 _cmdt_list->cmdts[200].cmd_xa = -100;
@@ -423,41 +470,91 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     } else {
         if (battle_cursor_history[5]) {
             //checking if sprite is placed correctly
-            int expected_x = (selected_tile%10)*26-20;
-            int expected_y = (selected_tile/10)*20-15;
+            int expected_x = (selected_tile%10)*25+24;
+            int expected_y = (selected_tile/10)*20-5;
+            
+            //rendering debug info
+            char draw_string[32];
+            mr_t mr;
+            mr.display_width = 32;
+            mr.display_height = 20;
+            mr_point_t offset;
+            mr.draw_rectangle_callback = mr_draw_rectangle_framebuffer_color;
+            mr.draw_string_callback = mr_draw_string_framebuffer_color;
+            mr.display = 0;
+            mr.buffer = (uint8_t *)LWRAM(0);
+
+            sprintf(draw_string,"%d",expected_x);
+            mr_rectangle_t rectangle = (mr_rectangle_t){0,0,32,20};
+            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+            for (int i = 0; i<32*20; i++)
+                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*20+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+            sprintf(draw_string,"%d",expected_y);
+            rectangle = (mr_rectangle_t){0,0,32,20};
+            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+            for (int i = 0; i<32*20; i++)
+                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*40+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+            sprintf(draw_string,"%d",tiles_x[selected_tile]);
+            rectangle = (mr_rectangle_t){0,0,32,20};
+            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+            for (int i = 0; i<32*20; i++)
+                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*60+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+            sprintf(draw_string,"%d",tiles_y[selected_tile]);
+            rectangle = (mr_rectangle_t){0,0,32,20};
+            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+            for (int i = 0; i<32*20; i++)
+                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*80+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+
             //using mahnattan distance
             int abs_x = (expected_x > tiles_x[selected_tile]) ? (expected_x - tiles_x[selected_tile]) : (tiles_x[selected_tile] - expected_x);
             int abs_y = (expected_y > tiles_y[selected_tile]) ? (expected_y - tiles_y[selected_tile]) : (tiles_y[selected_tile] - expected_y);
-            if ( (abs_x < 4) && (abs_y < 4) ){
+            if ( (abs_x < 5) && (abs_y < 5) ){
                 //match, move tile away
                 tiles_x[selected_tile] = -200;
                 tiles_y[selected_tile] = -200;
-                //TODO: update VDP2 layer
+                //update tile coord
+                _cmdt_list->cmdts[10+selected_tile].cmd_xa = tiles_x[selected_tile];
+                _cmdt_list->cmdts[10+selected_tile].cmd_ya = tiles_y[selected_tile];
+                //update VDP2 layer, generating mask first
+                generate_piece_mask(drawarea, (selected_tile%10), (selected_tile/10));
+                //now restoring VDP2 pixels according to this mask
+                int fuse_x = (selected_tile%10)*50-14;
+                int fuse_y = (selected_tile/10)*40-10;
+                for (int yy=0; yy<30; yy++)
+                    for (int xx=0; xx<40; xx++)
+                        if (drawarea[yy*40+xx]==1) {
+                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = tga_copy[18+256*3+index];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = tga_copy[18+256*3+index+513];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = tga_copy[18+256*3+index];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = tga_copy[18+256*3+index+513];
+                        } else if (drawarea[yy*40+xx]==2) {
+                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = 0;
+                        } 
             }
             //releasing grab button
             selected_tile = -1;
             //restore cursor sprite in case it was different
-            memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x1000), &(asset_cursor1_tga[18+3*3]),32*32);
+            memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor1_tga[18+3*3]),32*32);
         }
         battle_cursor_history[5] = 0;
     }
 
-    //using random shifts for every tile
-    /*int x,y;
-    uint16_t buf;
-    for (int tile=0;tile<(GRID_SIZE_Y*GRID_SIZE_X); tile++)
-    {
-        buf = _cmdt_list->cmdts[10+tile].cmd_xa;
-        buf += ((rand()&0x7)-4) + shift_x;
-        if (buf < 0) buf = 0;
-        if (buf > 320) buf = 320;
-        _cmdt_list->cmdts[10+tile].cmd_xa = buf;
-
-        buf = _cmdt_list->cmdts[10+tile].cmd_ya;
-        buf += ((rand()&0x7)-4) + shift_y;
-        if (buf < 0) buf = 0;
-        if (buf > 240) buf = 240;
-        _cmdt_list->cmdts[10+tile].cmd_ya = buf;
-    }*/
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }

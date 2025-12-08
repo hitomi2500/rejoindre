@@ -19,6 +19,7 @@ SH_SRCS:= \
 	main.c \
 	input.c \
 	battle.c \
+	font_renderer.c \
 	video_vdp1.c \
 	video_vdp2.c \
 	video.c

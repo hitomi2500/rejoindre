@@ -33,8 +33,12 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
         .raw = 0x0000,
         .pre_clipping_disable = true};
 
-    vdp1_cmdt_color_bank_t font_color_bank;
-    font_color_bank.raw = 0x0;
+    vdp1_cmdt_color_bank_t pieces_color_bank;
+    pieces_color_bank.raw = 0x0;
+    vdp1_cmdt_color_bank_t message_color_bank;
+    message_color_bank.raw = 0x200;
+    vdp1_cmdt_color_bank_t system_color_bank;
+    system_color_bank.raw = 0x300;
 
     assert(_cmdt_list != NULL);
 
@@ -60,48 +64,42 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_local_coord_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_LOCAL_COORDS_INDEX]);
     vdp1_cmdt_vtx_local_coord_set(&_cmdt_list->cmdts[VIDEO_VDP1_ORDER_LOCAL_COORDS_INDEX], local_coord_ul);
 
-    //command 2 : left border, distorted sprite : 8x240 -> 32x240, storing at +0
+    //command 2 : left border, normal sprite : 32x240, storing at +0
     index = 2;
     base = vdp1_vram_partitions.texture_base;
-    vdp1_cmdt_scaled_sprite_set(&_cmdt_list->cmdts[index]);
-    vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
+    vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 0;
     _cmdt_list->cmdts[index].cmd_ya= 0;
-    _cmdt_list->cmdts[index].cmd_xc= 31;
-    _cmdt_list->cmdts[index].cmd_yc= 239;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
-    _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
+    _cmdt_list->cmdts[index].cmd_size=((32/8)<<8)|(240);
     //filling with black
-    memset(base,23,8*240);
+    memset(base,23,32*240);
 
-    //command 3 : right border, distorted sprite : 8x240 -> 64x240, storing at +0x800
+    //command 3 : right border, normal sprite : 32x240, storing at +0x2000
     index = 3;
-    base = vdp1_vram_partitions.texture_base+0x800;
-    vdp1_cmdt_scaled_sprite_set(&_cmdt_list->cmdts[index]);
-    vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
+    base = vdp1_vram_partitions.texture_base+0x2000;
+    vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 288;
     _cmdt_list->cmdts[index].cmd_ya= 0;
-    _cmdt_list->cmdts[index].cmd_xc= 288+31;
-    _cmdt_list->cmdts[index].cmd_yc= 239;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
-    _cmdt_list->cmdts[index].cmd_size=((8/8)<<8)|(240);
+    _cmdt_list->cmdts[index].cmd_size=((32/8)<<8)|(240);
     //filling with black
-    memset(base,55,8*240);
+    memset(base,55,32*240);
 
-    //command 4 : erase quad, distorted sprite : 8x1 -> 256x120, storing at +0x3400
+    //command 4 : erase quad, distorted sprite : 8x1 -> 256x120, storing at +0x3E00
     index = 4;
-    base = vdp1_vram_partitions.texture_base+0x3400;
+    base = vdp1_vram_partitions.texture_base+0x3E00;
     vdp1_cmdt_scaled_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],pieces_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 32;
     _cmdt_list->cmdts[index].cmd_ya= 120;
     _cmdt_list->cmdts[index].cmd_xc= 32+255;
@@ -122,7 +120,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
         vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
         vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
         _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
-        vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+        vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],pieces_color_bank);//8bpp
         _cmdt_list->cmdts[index].cmd_xa= ((index-10)%10)*25 - 5;
         _cmdt_list->cmdts[index].cmd_ya= ((index-10)/10)*19 - 5;
         vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
@@ -135,14 +133,13 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_link_type_set(&_cmdt_list->cmdts[129],VDP1_CMDT_LINK_TYPE_JUMP_ASSIGN);
     vdp1_cmdt_link_set(&_cmdt_list->cmdts[129],200);
 
-    //command 200 : cursor, normal : 32x32, storing at +0x1000
+    //command 200 : cursor, normal : 32x32, storing at +0x2a000
     index = 200;
-    font_color_bank.raw = 0x300;//using special palette for cursor
-    base = vdp1_vram_partitions.texture_base+0x1000;
+    base = vdp1_vram_partitions.texture_base+0x2a000;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);
     _cmdt_list->cmdts[index].cmd_xa= 100;
     _cmdt_list->cmdts[index].cmd_ya= 100;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
@@ -150,14 +147,13 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     //filling with transparent
     memset(base,0,32*32);
     
-    //command 201 : character message : 256x32, storing at +0x1400
+    //command 201 : character message : 256x32, storing at +0x2a400
     index = 201;
-    font_color_bank.raw = 0x200;//using special palette for effects
-    base = vdp1_vram_partitions.texture_base+0x1400;
+    base = vdp1_vram_partitions.texture_base+0x2a400;
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
-    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],font_color_bank);//8bpp
+    vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],message_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= (320-256)/2;
     _cmdt_list->cmdts[index].cmd_ya= 180;
     vdp1_cmdt_char_base_set(&_cmdt_list->cmdts[index],base);
