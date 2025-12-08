@@ -63,14 +63,16 @@ int battle_cursor_history[16] = {0};
 
 vdp1_vram_partitions_t battle_vdp1_vram_partitions;
 
-int tiles_x[120];
-int tiles_y[120];
+int pieces_x[120];
+int pieces_y[120];
 
-int selected_tile = -1;
+int selected_piece = -1;
 
 uint8_t * tga_copy;
 
 extern int global_frame_count;
+
+int pieces_vdp1_index[120];
 
 void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
 {
@@ -118,7 +120,7 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
                 }
             }
 
-            //bottom gradient, excluding bottom tiles
+            //bottom curve, excluding bottom tiles
             if (piece_y >= (GRID_SIZE_Y-1)) {
                 for (int xx=7;xx<33;xx++)
                     drawarea[24*40+xx] = 2;//border color
@@ -154,7 +156,7 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
                 }
             }
 
-            //left gradient, excluding left tiles
+            //left curve, excluding left tiles
             if (piece_x==0) {
                 for (int yy=5;yy<25;yy++)
                     drawarea[yy*40+7] = 2;//border color
@@ -203,7 +205,7 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
                 }
             }
 
-            //right gradient, excluding right tiles
+            //right curve, excluding right tiles
             if (piece_x>=(GRID_SIZE_X-1)) {
                 for (int yy=5;yy<25;yy++)
                     drawarea[yy*40+33] = 2;//border color
@@ -330,21 +332,22 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
                             break;
                     }
                 }
+            pieces_vdp1_index[sprite] = 10+sprite;
             sprite++;
         }
     }
 
-    //step 4 - assign random coords for every tile
-    int tile = 0;
+    //step 4 - assign random coords for every piece
+    int piece = 0;
     for (int y=0;y<(GRID_SIZE_Y); y++) {
         for (int x=0;x<(GRID_SIZE_X); x++) {
-            tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
-            tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
-            //tiles_x[tile] = x*28+60;//((unsigned short)rand()) % 300 - 10;
-            //tiles_y[tile] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
-            _cmdt_list->cmdts[10+tile].cmd_xa = tiles_x[tile];
-            _cmdt_list->cmdts[10+tile].cmd_ya = tiles_y[tile];
-            tile++;
+            pieces_x[piece] = ((unsigned short)rand()) % 300 - 10;
+            pieces_y[piece] = ((unsigned short)rand()) % 200 + 10;
+            //pieces_x[piece] = x*28+60;//((unsigned short)rand()) % 300 - 10;
+            //pieces_y[piece] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
+            _cmdt_list->cmdts[pieces_vdp1_index[piece]].cmd_xa = pieces_x[piece];
+            _cmdt_list->cmdts[pieces_vdp1_index[piece]].cmd_ya = pieces_y[piece];
+            piece++;
         }
     }
 
@@ -442,17 +445,17 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         } else
             battle_cursor_history[3] = 0;
 
-    if (-1 == selected_tile) {
+    if (-1 == selected_piece) {
         //show cursor
         _cmdt_list->cmdts[200].cmd_xa = battle_cursor_x;
         _cmdt_list->cmdts[200].cmd_ya = battle_cursor_y;
     } else {
         //centering tile on cursor hot point
-        tiles_x[selected_tile] = battle_cursor_x + 12 - 20;
-        tiles_y[selected_tile] = battle_cursor_y + 2 - 15;
+        pieces_x[selected_piece] = battle_cursor_x + 12 - 20;
+        pieces_y[selected_piece] = battle_cursor_y + 2 - 15;
         //update tile coord
-        _cmdt_list->cmdts[10+selected_tile].cmd_xa = tiles_x[selected_tile];
-        _cmdt_list->cmdts[10+selected_tile].cmd_ya = tiles_y[selected_tile];
+        _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa = pieces_x[selected_piece];
+        _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya = pieces_y[selected_piece];
         //hide cursor
         _cmdt_list->cmdts[200].cmd_xa = -100;
         _cmdt_list->cmdts[200].cmd_ya = -100;
@@ -463,23 +466,44 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         if (0 == battle_cursor_history[5]) {
             //pressing grab button
             //searching for nearby tile
-            selected_tile = -1;
+            selected_piece = -1;
             //cursor hot point is {12;2}
             int hot_x = battle_cursor_x+12;
             int hot_y = battle_cursor_y+2;
+            //looking for last (top) tile that hits
             for (int tile=0;tile<120;tile++)
             {
-                if ( (hot_x >= tiles_x[tile]+7) && (hot_x <= tiles_x[tile]+33) && (hot_y >= tiles_y[tile]+5) && (hot_y <= tiles_y[tile]+24) ){
-                    selected_tile = tile;
+                if ( (hot_x >= pieces_x[tile]+7) && (hot_x <= pieces_x[tile]+33) && (hot_y >= pieces_y[tile]+5) && (hot_y <= pieces_y[tile]+24) ){
+                    selected_piece = tile;
                 }
             }
-            if (-1 == selected_tile) {
+            if (-1 == selected_piece) {
                 //no tile found, changing cursor to no go
                 memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor2_tga[18+3*3]),32*32);
             } else {
                 //tile found, hiding cursor
                 _cmdt_list->cmdts[200].cmd_xa = -100;
                 _cmdt_list->cmdts[200].cmd_ya = -100;
+                //sorting the list to put the found tile on top
+                //shift entire list, putting selected_piece at the end. since only xa,ya and addr differ, we only update them
+                /*    short backup_xa = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa;
+                    short backup_ya = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya;
+                    short backup_srca = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_srca;
+                    int backup_vdp1_index = pieces_vdp1_index[selected_piece];
+                    for (int i=pieces_vdp1_index[selected_piece];i<129;i++){
+                        _cmdt_list->cmdts[i].cmd_xa = _cmdt_list->cmdts[i+1].cmd_xa;
+                        _cmdt_list->cmdts[i].cmd_ya = _cmdt_list->cmdts[i+1].cmd_ya;
+                        _cmdt_list->cmdts[i].cmd_srca = _cmdt_list->cmdts[i+1].cmd_srca;
+                    }
+                    for (int i=selected_piece;i<119;i++)
+                        pieces_vdp1_index[i] = pieces_vdp1_index[i+1];
+
+                    _cmdt_list->cmdts[129].cmd_xa = backup_xa;
+                    _cmdt_list->cmdts[129].cmd_ya = backup_ya;
+                    _cmdt_list->cmdts[129].cmd_srca = backup_srca;
+                    pieces_vdp1_index[119] = backup_vdp1_index;
+
+                    selected_piece =119;*/
             }
         }
         battle_cursor_history[5]++;
@@ -487,8 +511,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         if (battle_cursor_history[5]) {
             //releasing grab button
             //checking if sprite is placed correctly
-            int piece_x = (selected_tile%10);
-            int piece_y = (selected_tile/10);
+            int piece_x = (selected_piece%10);
+            int piece_y = (selected_piece/10);
 
             int expected_x = piece_x*25+24;
             int expected_y = piece_y*20-5;
@@ -505,13 +529,13 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             for (int i = 0; i<32*20; i++)
                 *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*40+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
-            sprintf(draw_string,"%d",tiles_x[selected_tile]);
+            sprintf(draw_string,"%d",pieces_x[selected_piece]);
             rectangle = (mr_rectangle_t){0,0,32,20};
             mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
             for (int i = 0; i<32*20; i++)
                 *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*60+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
-            sprintf(draw_string,"%d",tiles_y[selected_tile]);
+            sprintf(draw_string,"%d",pieces_y[selected_piece]);
             rectangle = (mr_rectangle_t){0,0,32,20};
             mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
             for (int i = 0; i<32*20; i++)
@@ -519,15 +543,15 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
 
 
             //using mahnattan distance
-            int abs_x = (expected_x > tiles_x[selected_tile]) ? (expected_x - tiles_x[selected_tile]) : (tiles_x[selected_tile] - expected_x);
-            int abs_y = (expected_y > tiles_y[selected_tile]) ? (expected_y - tiles_y[selected_tile]) : (tiles_y[selected_tile] - expected_y);
+            int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
+            int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
             if ( (abs_x < 5) && (abs_y < 5) ){
                 //match, move tile away
-                tiles_x[selected_tile] = -200;
-                tiles_y[selected_tile] = -200;
+                pieces_x[selected_piece] = -200;
+                pieces_y[selected_piece] = -200;
                 //update tile coord
-                _cmdt_list->cmdts[10+selected_tile].cmd_xa = tiles_x[selected_tile];
-                _cmdt_list->cmdts[10+selected_tile].cmd_ya = tiles_y[selected_tile];
+                _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa = pieces_x[selected_piece];
+                _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya = pieces_y[selected_piece];
                 //update VDP2 layer, generating mask first
                 generate_piece_mask(drawarea, piece_x, piece_y);
 
@@ -571,7 +595,7 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                         } 
             }
             //releasing grab button
-            selected_tile = -1;
+            selected_piece = -1;
             //restore cursor sprite in case it was different
             memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor1_tga[18+3*3]),32*32);
         }
