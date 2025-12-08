@@ -46,8 +46,8 @@ static unsigned char Vertical_Curve_20[200] = {
     0,0,2,1,1,1,1,1,1,1
 };
 
-int Curves_X[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
-int Curves_Y[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
+uint8_t Curves_X[16][16];//[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
+uint8_t Curves_Y[16][16];//[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 
 extern vdp1_cmdt_list_t *_cmdt_list;
 
@@ -69,6 +69,8 @@ int tiles_y[120];
 int selected_tile = -1;
 
 uint8_t * tga_copy;
+
+extern int global_frame_count;
 
 void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
 {
@@ -117,14 +119,14 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
             }
 
             //bottom gradient, excluding bottom tiles
-            if (piece_y == (GRID_SIZE_Y-1)) {
+            if (piece_y >= (GRID_SIZE_Y-1)) {
                 for (int xx=7;xx<33;xx++)
                     drawarea[24*40+xx] = 2;//border color
             } else {
                 if (Curves_X[piece_y+1][piece_x] % 2 == 0) {
                     for (int yy=21;yy<30;yy++)
                         for (int xx=7;xx<33;xx++)
-                            switch (Horizontal_Curve_26[(yy-21)*26+(xx-7)]) {
+                            switch (Horizontal_Curve_26[(yy-22)*26+(xx-7)]) { //21
                             case 0:
                                 drawarea[yy*40+xx] = 1;//pixel color
                                 break;
@@ -138,7 +140,7 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
                 } else {
                     for (int yy=18;yy<28;yy++)
                         for (int xx=7;xx<33;xx++)
-                            switch (Horizontal_Curve_26[(27-yy)*26+(xx-7)]) {
+                            switch (Horizontal_Curve_26[(28-yy)*26+(xx-7)]) { //27
                             case 0:
                                 drawarea[yy*40+xx] = 0;//transparent
                                 break;
@@ -202,7 +204,7 @@ void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
             }
 
             //right gradient, excluding right tiles
-            if (piece_x==(GRID_SIZE_X-1)) {
+            if (piece_x>=(GRID_SIZE_X-1)) {
                 for (int yy=5;yy<25;yy++)
                     drawarea[yy*40+33] = 2;//border color
             } else {
@@ -293,12 +295,14 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     }
 
     //step 2 - generate random curve directions
-    for (int y=0;y<(GRID_SIZE_Y-1); y++) {
-        for (int x=0;x<(GRID_SIZE_X-1); x++) {
-            Curves_X[y][x] = rand();
-            Curves_Y[y][x] = rand();
+    for (int y=0;y<GRID_SIZE_Y; y++) {
+        for (int x=0;x<GRID_SIZE_X; x++) {
+            Curves_X[y][x] = rand() & 0x01;
+            Curves_Y[y][x] = rand() & 0x01;
         }
     }
+    memcpy(LWRAM(0x1000),Curves_X,sizeof(Curves_X));
+    memcpy(LWRAM(0x1200),Curves_Y,sizeof(Curves_Y));
 
     //step 3 - using downsampled same-palette image to fill VDP1 sprites
     int sprite = 0;
@@ -334,10 +338,10 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     int tile = 0;
     for (int y=0;y<(GRID_SIZE_Y); y++) {
         for (int x=0;x<(GRID_SIZE_X); x++) {
-            //tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
-            //tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
-            tiles_x[tile] = x*28+60;//((unsigned short)rand()) % 300 - 10;
-            tiles_y[tile] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
+            tiles_x[tile] = ((unsigned short)rand()) % 300 - 10;
+            tiles_y[tile] = ((unsigned short)rand()) % 200 + 10;
+            //tiles_x[tile] = x*28+60;//((unsigned short)rand()) % 300 - 10;
+            //tiles_y[tile] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
             _cmdt_list->cmdts[10+tile].cmd_xa = tiles_x[tile];
             _cmdt_list->cmdts[10+tile].cmd_ya = tiles_y[tile];
             tile++;
@@ -395,6 +399,18 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 void battle_scheduler(smpc_peripheral_digital_t * controller)
 {
     uint8_t drawarea[40*30];
+                //rendering debug info
+            char draw_string[32];
+            mr_t mr;
+            mr.display_width = 32;
+            mr.display_height = 20;
+            mr_point_t offset;
+            mr.draw_rectangle_callback = mr_draw_rectangle_framebuffer_color;
+            mr.draw_string_callback = mr_draw_string_framebuffer_color;
+            mr.display = 0;
+            mr.buffer = (uint8_t *)LWRAM(0);
+    mr_rectangle_t rectangle;
+
 
         //cursor or tile movement
         if(controller->pressed.button.up) {
@@ -469,21 +485,14 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         battle_cursor_history[5]++;
     } else {
         if (battle_cursor_history[5]) {
+            //releasing grab button
             //checking if sprite is placed correctly
-            int expected_x = (selected_tile%10)*25+24;
-            int expected_y = (selected_tile/10)*20-5;
-            
-            //rendering debug info
-            char draw_string[32];
-            mr_t mr;
-            mr.display_width = 32;
-            mr.display_height = 20;
-            mr_point_t offset;
-            mr.draw_rectangle_callback = mr_draw_rectangle_framebuffer_color;
-            mr.draw_string_callback = mr_draw_string_framebuffer_color;
-            mr.display = 0;
-            mr.buffer = (uint8_t *)LWRAM(0);
+            int piece_x = (selected_tile%10);
+            int piece_y = (selected_tile/10);
 
+            int expected_x = piece_x*25+24;
+            int expected_y = piece_y*20-5;
+            
             sprintf(draw_string,"%d",expected_x);
             mr_rectangle_t rectangle = (mr_rectangle_t){0,0,32,20};
             mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
@@ -520,10 +529,23 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 _cmdt_list->cmdts[10+selected_tile].cmd_xa = tiles_x[selected_tile];
                 _cmdt_list->cmdts[10+selected_tile].cmd_ya = tiles_y[selected_tile];
                 //update VDP2 layer, generating mask first
-                generate_piece_mask(drawarea, (selected_tile%10), (selected_tile/10));
+                generate_piece_mask(drawarea, piece_x, piece_y);
+
+                sprintf(draw_string,"%d",piece_x);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*100+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+                sprintf(draw_string,"%d",piece_y);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*120+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
                 //now restoring VDP2 pixels according to this mask
-                int fuse_x = (selected_tile%10)*50-14;
-                int fuse_y = (selected_tile/10)*40-10;
+                int fuse_x = piece_x*50-14;
+                int fuse_y = piece_y*40-10;
                 for (int yy=0; yy<30; yy++)
                     for (int xx=0; xx<40; xx++)
                         if (drawarea[yy*40+xx]==1) {
@@ -555,6 +577,25 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         }
         battle_cursor_history[5] = 0;
     }
+
+    //draw timer
+    int secs = (global_frame_count*1001)/60000;
+    if (VDP2_TVMD_TV_STANDARD_PAL == vdp2_tvmd_tv_standard_get())
+        secs = global_frame_count/50;
+    
+    sprintf(draw_string,"%d:%02d",secs/60,secs%60);
+    rectangle = (mr_rectangle_t){0,0,32,20};
+    mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+    for (int i = 0; i<32*20; i++)
+        *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+0x2000+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+    //TODO: link pieces
+
+    //TODO: sounds for link, fuse, grab, release, can't grab
+
+    //TODO: remove holes
+
+    //TODO: on piece release, if unsuccessful, put it at the end of draw list (on top for user)
 
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }

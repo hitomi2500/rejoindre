@@ -18,7 +18,7 @@ extern uint8_t asset_bitmap2_tga[];
 
 static void rejoindre_vblank_out_handler(void *work __unused);
 
-int global_frame_count = 0;
+int global_frame_count;
 
 smpc_peripheral_digital_t controller;
 
