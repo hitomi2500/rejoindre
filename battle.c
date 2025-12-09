@@ -5,6 +5,7 @@
 #include "video_vdp2.h"
 #include "font_renderer.h"
 #include "font_pacifico_16.h"
+#include "battle.h"
 
 #define GRID_SIZE_X 10
 #define GRID_SIZE_Y 12
@@ -51,6 +52,8 @@ uint8_t Curves_Y[16][16];//[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 
 extern vdp1_cmdt_list_t *_cmdt_list;
 
+//piece_t pieces[120];
+
 int battle_cursor_x;
 int battle_cursor_y;
 int battle_cursor_tile_offset_x;
@@ -72,7 +75,11 @@ uint8_t * tga_copy;
 
 extern int global_frame_count;
 
-int pieces_vdp1_index[120];
+//every part of battle treats the titles in an unsorted linear manner, with the exception of VDP1 setup
+//pieces textures are stored in VDP1 vram constantly, but the commandlist is updated in accordance to current sort order
+
+uint8_t pieces_game_to_vdp1[120]; //fetch converts indexes from game index to vdp1 command index
+uint8_t pieces_vdp1_to_game[120]; //fetch converts indexes from vdp1 command index to vdp1 index
 
 void generate_piece_mask(uint8_t * drawarea, int piece_x, int piece_y)
 {
@@ -303,8 +310,6 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             Curves_Y[y][x] = rand() & 0x01;
         }
     }
-    memcpy(LWRAM(0x1000),Curves_X,sizeof(Curves_X));
-    memcpy(LWRAM(0x1200),Curves_Y,sizeof(Curves_Y));
 
     //step 3 - using downsampled same-palette image to fill VDP1 sprites
     int sprite = 0;
@@ -332,7 +337,8 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
                             break;
                     }
                 }
-            pieces_vdp1_index[sprite] = 10+sprite;
+            pieces_game_to_vdp1[sprite] = sprite;
+            pieces_vdp1_to_game[sprite] = sprite;
             sprite++;
         }
     }
@@ -345,8 +351,8 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
             pieces_y[piece] = ((unsigned short)rand()) % 200 + 10;
             //pieces_x[piece] = x*28+60;//((unsigned short)rand()) % 300 - 10;
             //pieces_y[piece] = y*20+2;// ((unsigned short)rand()) % 200 + 10;
-            _cmdt_list->cmdts[pieces_vdp1_index[piece]].cmd_xa = pieces_x[piece];
-            _cmdt_list->cmdts[pieces_vdp1_index[piece]].cmd_ya = pieces_y[piece];
+            _cmdt_list->cmdts[pieces_game_to_vdp1[piece]+10].cmd_xa = pieces_x[piece];
+            _cmdt_list->cmdts[pieces_game_to_vdp1[piece]+10].cmd_ya = pieces_y[piece];
             piece++;
         }
     }
@@ -454,8 +460,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         pieces_x[selected_piece] = battle_cursor_x + 12 - 20;
         pieces_y[selected_piece] = battle_cursor_y + 2 - 15;
         //update tile coord
-        _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa = pieces_x[selected_piece];
-        _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya = pieces_y[selected_piece];
+        _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
+        _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
         //hide cursor
         _cmdt_list->cmdts[200].cmd_xa = -100;
         _cmdt_list->cmdts[200].cmd_ya = -100;
@@ -474,7 +480,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             for (int tile=0;tile<120;tile++)
             {
                 if ( (hot_x >= pieces_x[tile]+7) && (hot_x <= pieces_x[tile]+33) && (hot_y >= pieces_y[tile]+5) && (hot_y <= pieces_y[tile]+24) ){
-                    selected_piece = tile;
+                    if ((selected_piece == -1) || (pieces_game_to_vdp1[tile] > pieces_game_to_vdp1[selected_piece]))
+                        selected_piece = tile;
                 }
             }
             if (-1 == selected_piece) {
@@ -486,24 +493,34 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 _cmdt_list->cmdts[200].cmd_ya = -100;
                 //sorting the list to put the found tile on top
                 //shift entire list, putting selected_piece at the end. since only xa,ya and addr differ, we only update them
-                /*    short backup_xa = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa;
-                    short backup_ya = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya;
-                    short backup_srca = _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_srca;
-                    int backup_vdp1_index = pieces_vdp1_index[selected_piece];
-                    for (int i=pieces_vdp1_index[selected_piece];i<129;i++){
-                        _cmdt_list->cmdts[i].cmd_xa = _cmdt_list->cmdts[i+1].cmd_xa;
-                        _cmdt_list->cmdts[i].cmd_ya = _cmdt_list->cmdts[i+1].cmd_ya;
-                        _cmdt_list->cmdts[i].cmd_srca = _cmdt_list->cmdts[i+1].cmd_srca;
-                    }
-                    for (int i=selected_piece;i<119;i++)
-                        pieces_vdp1_index[i] = pieces_vdp1_index[i+1];
+                short backup_xa = _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa;
+                short backup_ya = _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya;
+                short backup_srca = _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_srca;
+                int starting_vdp1 = pieces_game_to_vdp1[selected_piece];
+                *((uint8_t*)LWRAM(0xFF0)) = selected_piece;
+                *((uint8_t*)LWRAM(0xFF1)) = starting_vdp1;
+                for (int i = starting_vdp1; i<129; i++){
+                    //shift next command to current command to the
+                    _cmdt_list->cmdts[i+10].cmd_xa = _cmdt_list->cmdts[i+11].cmd_xa;
+                    _cmdt_list->cmdts[i+10].cmd_ya = _cmdt_list->cmdts[i+11].cmd_ya;
+                    _cmdt_list->cmdts[i+10].cmd_srca = _cmdt_list->cmdts[i+11].cmd_srca;
+                }
+                //update pieces_game_to_vdp1
+                for (int i = 119; i>=starting_vdp1; i--){
+                    pieces_game_to_vdp1[pieces_vdp1_to_game[i]] = pieces_game_to_vdp1[pieces_vdp1_to_game[i-1]];
+                }
 
-                    _cmdt_list->cmdts[129].cmd_xa = backup_xa;
-                    _cmdt_list->cmdts[129].cmd_ya = backup_ya;
-                    _cmdt_list->cmdts[129].cmd_srca = backup_srca;
-                    pieces_vdp1_index[119] = backup_vdp1_index;
-
-                    selected_piece =119;*/
+                //update pieces_vdp1_to_game
+                for (int i = starting_vdp1; i<119; i++){
+                    pieces_vdp1_to_game[i] = pieces_vdp1_to_game[i+1];
+                }
+                
+                //updating the moved entry
+                _cmdt_list->cmdts[129].cmd_xa = backup_xa;
+                _cmdt_list->cmdts[129].cmd_ya = backup_ya;
+                _cmdt_list->cmdts[129].cmd_srca = backup_srca;
+                pieces_game_to_vdp1[selected_piece] = 119;
+                pieces_vdp1_to_game[119] = selected_piece;
             }
         }
         battle_cursor_history[5]++;
@@ -550,8 +567,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 pieces_x[selected_piece] = -200;
                 pieces_y[selected_piece] = -200;
                 //update tile coord
-                _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_xa = pieces_x[selected_piece];
-                _cmdt_list->cmdts[pieces_vdp1_index[selected_piece]].cmd_ya = pieces_y[selected_piece];
+                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
+                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
                 //update VDP2 layer, generating mask first
                 generate_piece_mask(drawarea, piece_x, piece_y);
 
@@ -620,6 +637,12 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     //TODO: remove holes
 
     //TODO: on piece release, if unsuccessful, put it at the end of draw list (on top for user)
+
+    //TODO :fix 4 pixel border
+
+    memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
+    memcpy(LWRAM(0x1200),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
+
 
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }
