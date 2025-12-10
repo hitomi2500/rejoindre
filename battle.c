@@ -52,8 +52,6 @@ uint8_t Curves_Y[16][16];//[GRID_SIZE_Y - 1][GRID_SIZE_X - 1];
 
 extern vdp1_cmdt_list_t *_cmdt_list;
 
-//piece_t pieces[120];
-
 int battle_cursor_x;
 int battle_cursor_y;
 int battle_cursor_tile_offset_x;
@@ -68,6 +66,9 @@ vdp1_vram_partitions_t battle_vdp1_vram_partitions;
 
 int pieces_x[120];
 int pieces_y[120];
+
+uint8_t pieces_link_array[120];
+int pieces_link_groups;
 
 int selected_piece = -1;
 
@@ -273,6 +274,71 @@ void mcu_renderer_draw_text(mr_t mr, char * string, const uint8_t * font, mr_rec
     mr_draw_utf8_text(&mr,(uint8_t *)string,&rect,&offset);
 }
 
+void link_neigbour(root,neigbour,link_x,link_y) {
+                //rendering debug info
+            char draw_string[32];
+            mr_t mr;
+            mr.display_width = 32;
+            mr.display_height = 20;
+            mr_point_t offset;
+            mr.draw_rectangle_callback = mr_draw_rectangle_framebuffer_color;
+            mr.draw_string_callback = mr_draw_string_framebuffer_color;
+            mr.display = 0;
+            mr.buffer = (uint8_t *)LWRAM(0);
+    mr_rectangle_t rectangle;
+
+    //if already linked, do not link again
+    if ((pieces_link_array[root]) && 
+        (pieces_link_array[root]==pieces_link_array[neigbour]))
+            return;
+    int abs_x = pieces_x[neigbour] - pieces_x[root];
+    abs_x -= link_x;
+    abs_x = (abs_x > 0) ? abs_x : -abs_x;
+    int abs_y = pieces_y[neigbour] - pieces_y[root];
+    abs_y -= link_y;
+    abs_y = (abs_y > 0) ? abs_y : -abs_y;
+
+                    sprintf(draw_string,"%d",abs_x);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*100+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+                sprintf(draw_string,"%d",abs_y);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*120+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+    //using mahnattan distance
+    if ( (abs_x < 5) && (abs_y < 5) ) {
+        //it's a link, shifting neighbour to fit!
+        pieces_x[neigbour] = pieces_x[root]+link_x;
+        pieces_y[neigbour] = pieces_y[root]+link_y;
+        //updating vdp1 coords
+        _cmdt_list->cmdts[pieces_game_to_vdp1[neigbour]+10].cmd_xa = pieces_x[neigbour];
+        _cmdt_list->cmdts[pieces_game_to_vdp1[neigbour]+10].cmd_ya = pieces_y[neigbour];
+        if ((pieces_link_array[root]) && (0==pieces_link_array[neigbour])) {
+            //adding neigbour to group
+            pieces_link_array[neigbour] = pieces_link_array[root];
+        } else if (0 == (pieces_link_array[root]) && (pieces_link_array[neigbour])) {
+            //root being added to neighbour's group
+            pieces_link_array[root] = pieces_link_array[neigbour];
+        } else if ((pieces_link_array[root]) && (pieces_link_array[neigbour])) {
+            //merging groups! fun times!
+            int merger = pieces_link_array[root];
+            int merged = pieces_link_array[neigbour];
+            for (int i=0;i<120;i++)
+                if (pieces_link_array[i] == merged) pieces_link_array[i] = merger;
+        } else {
+            //new group
+            pieces_link_groups++;
+            pieces_link_array[root] = pieces_link_groups;
+            pieces_link_array[neigbour] = pieces_link_groups;
+        }
+    }
+}
+
 void battle_init(uint8_t * tga, uint8_t * tga_half)
 {
     uint8_t drawarea[40*30];
@@ -402,6 +468,12 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 
     //update vdp1
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
+
+    //unlink all pieces
+    for (int i = 0; i<120; i++)
+        pieces_link_array[i] = 0;
+
+    pieces_link_groups = 0;//starting with no link groups
 }
 
 
@@ -459,9 +531,24 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         //centering tile on cursor hot point
         pieces_x[selected_piece] = battle_cursor_x + 12 - 20;
         pieces_y[selected_piece] = battle_cursor_y + 2 - 15;
+
         //update tile coord
         _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
         _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
+        //if linked, move entire array
+        if (pieces_link_array[selected_piece]){
+            for (int i=0;i<120;i++)
+                if (pieces_link_array[i] == pieces_link_array[selected_piece]) {
+                    int diff_x = (i%10 - selected_piece%10)*25;
+                    int diff_y = (i/10 - selected_piece/10)*20;
+                    //shifting pieces
+                    pieces_x[i] = pieces_x[selected_piece] + diff_x;
+                    pieces_y[i] = pieces_y[selected_piece] + diff_y;
+                    //update tile coord
+                    _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_xa = pieces_x[i];
+                    _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_ya = pieces_y[i];
+                }
+        }
         //hide cursor
         _cmdt_list->cmdts[200].cmd_xa = -100;
         _cmdt_list->cmdts[200].cmd_ya = -100;
@@ -488,7 +575,7 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 //no tile found, changing cursor to no go
                 memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor2_tga[18+3*3]),32*32);
             } else {
-                //tile found, hiding cursor
+                //piece found, hiding cursor
                 _cmdt_list->cmdts[200].cmd_xa = -100;
                 _cmdt_list->cmdts[200].cmd_ya = -100;
                 //sorting the list to put the found tile on top
@@ -559,30 +646,18 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*80+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
 
-            //using mahnattan distance
+            //checking for fuse, using mahnattan distance
             int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
             int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
             if ( (abs_x < 5) && (abs_y < 5) ){
                 //match, move tile away
                 pieces_x[selected_piece] = -200;
                 pieces_y[selected_piece] = -200;
-                //update tile coord
+                //update piece coord
                 _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
                 _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
                 //update VDP2 layer, generating mask first
                 generate_piece_mask(drawarea, piece_x, piece_y);
-
-                sprintf(draw_string,"%d",piece_x);
-                rectangle = (mr_rectangle_t){0,0,32,20};
-                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-                for (int i = 0; i<32*20; i++)
-                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*100+i) = 16+*(uint8_t*)LWRAM(i*2+1);
-
-                sprintf(draw_string,"%d",piece_y);
-                rectangle = (mr_rectangle_t){0,0,32,20};
-                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-                for (int i = 0; i<32*20; i++)
-                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*120+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
                 //now restoring VDP2 pixels according to this mask
                 int fuse_x = piece_x*50-14;
@@ -610,6 +685,21 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                             *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
                             *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = 0;
                         } 
+            }
+            else
+            {
+                //fuse failed, checking for link, only neigbours, starting with top neighbour
+                /*if (selected_piece>10) 
+                    link_neigbour(selected_piece,selected_piece-10,0,-20);
+                //now checking bottom neighbour
+                else if (selected_piece<110) 
+                    link_neigbour(selected_piece,selected_piece+10,0,20);*/
+                //left neighbour
+                /*else if (selected_piece%10 > 0) 
+                    link_neigbour(selected_piece,selected_piece-1,-25,0);
+                //right neighbour
+                else */if (selected_piece%10 < 9) 
+                    link_neigbour(selected_piece,selected_piece+1,25,0);
             }
             //releasing grab button
             selected_piece = -1;
@@ -641,8 +731,9 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     //TODO :fix 4 pixel border
 
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
-    memcpy(LWRAM(0x1200),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
-
+    memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
+    memcpy(LWRAM(0x1200),pieces_link_array,sizeof(pieces_link_array));
+    *((uint8_t*)LWRAM(0x11F0)) = pieces_link_groups;
 
     vdp1_sync_cmdt_list_put(_cmdt_list, 0);
 }
