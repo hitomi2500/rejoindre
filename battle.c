@@ -766,15 +766,13 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     for (int i = 0; i<32*20; i++)
         *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+0x2000+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
-    //TODO: when linking, snap not just single neigbour, but all group
-
     //TODO: sounds for link, fuse, grab, release, can't grab
 
     //TODO: remove holes
 
-    //TODO: on piece release, if unsuccessful, put it at the end of draw list (on top for user)
-
     //TODO :fix 4 pixel border
+
+    //TODO :end battle message
 
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
     memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
