@@ -339,6 +339,48 @@ void link_neigbour(root,neigbour,link_x,link_y) {
     }
 }
 
+void fuse_piece(int selected_piece)
+{
+    uint8_t drawarea[40*30];
+    int piece_x = (selected_piece%10);
+    int piece_y = (selected_piece/10);
+    //match, move tile away
+                pieces_x[selected_piece] = -200;
+                pieces_y[selected_piece] = -200;
+                //update piece coord
+                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
+                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
+                //update VDP2 layer, generating mask first
+                generate_piece_mask(drawarea, piece_x, piece_y);
+
+                //now restoring VDP2 pixels according to this mask
+                int fuse_x = piece_x*50-14;
+                int fuse_y = piece_y*40-10;
+                for (int yy=0; yy<30; yy++)
+                    for (int xx=0; xx<40; xx++)
+                        if (drawarea[yy*40+xx]==1) {
+                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = tga_copy[18+256*3+index];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = tga_copy[18+256*3+index+513];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = tga_copy[18+256*3+index];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = tga_copy[18+256*3+index+513];
+                        } else if (drawarea[yy*40+xx]==2) {
+                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = 0;
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
+                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = 0;
+                        } 
+}
+
 void battle_init(uint8_t * tga, uint8_t * tga_half)
 {
     uint8_t drawarea[40*30];
@@ -650,41 +692,16 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
             int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
             if ( (abs_x < 5) && (abs_y < 5) ){
-                //match, move tile away
-                pieces_x[selected_piece] = -200;
-                pieces_y[selected_piece] = -200;
-                //update piece coord
-                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_xa = pieces_x[selected_piece];
-                _cmdt_list->cmdts[pieces_game_to_vdp1[selected_piece]+10].cmd_ya = pieces_y[selected_piece];
-                //update VDP2 layer, generating mask first
-                generate_piece_mask(drawarea, piece_x, piece_y);
-
-                //now restoring VDP2 pixels according to this mask
-                int fuse_x = piece_x*50-14;
-                int fuse_y = piece_y*40-10;
-                for (int yy=0; yy<30; yy++)
-                    for (int xx=0; xx<40; xx++)
-                        if (drawarea[yy*40+xx]==1) {
-                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = tga_copy[18+256*3+index];
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = tga_copy[18+256*3+index+513];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = tga_copy[18+256*3+index];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = tga_copy[18+256*3+index+513];
-                        } else if (drawarea[yy*40+xx]==2) {
-                            int index = (fuse_y+yy*2)*512+fuse_x+xx*2;
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index)) = 0;
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+1)) = tga_copy[18+256*3+index+1];
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+512)) = tga_copy[18+256*3+index+512];
-                            *((uint8_t *)VDP2_VRAM_ADDR(0, index+513)) = 0;
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index)) = 0;
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+1)) = tga_copy[18+256*3+index+1];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+512)) = tga_copy[18+256*3+index+512];
-                            *((uint8_t *)VDP2_VRAM_ADDR(2, index+513)) = 0;
-                        } 
+                //if linked, fuse entire list
+                if (pieces_link_array[selected_piece]){
+                    for (int i=0;i<120;i++)
+                        if (pieces_link_array[i] == pieces_link_array[selected_piece]) {
+                            fuse_piece(i);
+                        }
+                } else {
+                    //fuse single tile
+                    fuse_piece(selected_piece);
+                }
             }
             else
             {
