@@ -706,16 +706,16 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             else
             {
                 //fuse failed, checking for link, only neigbours, starting with top neighbour
-                /*if (selected_piece>10) 
+                if (selected_piece>10) 
                     link_neigbour(selected_piece,selected_piece-10,0,-20);
                 //now checking bottom neighbour
-                else if (selected_piece<110) 
-                    link_neigbour(selected_piece,selected_piece+10,0,20);*/
+                if (selected_piece<110) 
+                    link_neigbour(selected_piece,selected_piece+10,0,20);
                 //left neighbour
-                /*else if (selected_piece%10 > 0) 
+                if (selected_piece%10 > 0) 
                     link_neigbour(selected_piece,selected_piece-1,-25,0);
                 //right neighbour
-                else */if (selected_piece%10 < 9) 
+                if (selected_piece%10 < 9) 
                     link_neigbour(selected_piece,selected_piece+1,25,0);
             }
             //releasing grab button
@@ -737,7 +737,7 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     for (int i = 0; i<32*20; i++)
         *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+0x2000+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
-    //TODO: link pieces
+    //TODO: when linking, snap not just single neigbour, but all group
 
     //TODO: sounds for link, fuse, grab, release, can't grab
 
