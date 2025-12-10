@@ -313,8 +313,12 @@ void link_neigbour(root,neigbour,link_x,link_y) {
     //using mahnattan distance
     if ( (abs_x < 5) && (abs_y < 5) ) {
         //it's a link, shifting neighbour to fit!
+        int neighbour_snap_offset_x = pieces_x[neigbour];
+        int neighbour_snap_offset_y = pieces_y[neigbour];
         pieces_x[neigbour] = pieces_x[root]+link_x;
         pieces_y[neigbour] = pieces_y[root]+link_y;
+        neighbour_snap_offset_x -= pieces_x[neigbour];
+        neighbour_snap_offset_y -= pieces_y[neigbour];
         //updating vdp1 coords
         _cmdt_list->cmdts[pieces_game_to_vdp1[neigbour]+10].cmd_xa = pieces_x[neigbour];
         _cmdt_list->cmdts[pieces_game_to_vdp1[neigbour]+10].cmd_ya = pieces_y[neigbour];
@@ -324,12 +328,37 @@ void link_neigbour(root,neigbour,link_x,link_y) {
         } else if (0 == (pieces_link_array[root]) && (pieces_link_array[neigbour])) {
             //root being added to neighbour's group
             pieces_link_array[root] = pieces_link_array[neigbour];
+            //updating entire group coords
+            for (int i=0;i<120;i++) {
+                if (pieces_link_array[i] == pieces_link_array[neigbour])
+                    if  ( (i != root) && (i != neigbour) ) {
+                        //it's a link, shifting neighbour to fit!
+                        pieces_x[i] -= neighbour_snap_offset_x;
+                        pieces_y[i] -= neighbour_snap_offset_y;
+                        //updating vdp1 coords
+                        _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_xa = pieces_x[i];
+                        _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_ya = pieces_y[i];
+                    }
+            }
         } else if ((pieces_link_array[root]) && (pieces_link_array[neigbour])) {
             //merging groups! fun times!
             int merger = pieces_link_array[root];
             int merged = pieces_link_array[neigbour];
             for (int i=0;i<120;i++)
                 if (pieces_link_array[i] == merged) pieces_link_array[i] = merger;
+            //updating entire group coords
+            for (int i=0;i<120;i++) {
+                if (pieces_link_array[i] == pieces_link_array[neigbour])
+                    if  ( (i != root) && (i != neigbour) ) {
+                        //it's a link, shifting neighbour to fit!
+                        pieces_x[i] -= neighbour_snap_offset_x;
+                        pieces_y[i] -= neighbour_snap_offset_y;
+                        //updating vdp1 coords
+                        _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_xa = pieces_x[i];
+                        _cmdt_list->cmdts[pieces_game_to_vdp1[i]+10].cmd_ya = pieces_y[i];
+                    }
+                }
+                    
         } else {
             //new group
             pieces_link_groups++;
