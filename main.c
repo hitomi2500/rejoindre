@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <video.h>
 #include "battle.h"
+#include "videomode_select.h"
 
 extern uint8_t asset_bitmap_tga[];
 extern uint8_t asset_bitmap2_tga[];
@@ -28,8 +29,15 @@ extern uint8_t asset_sound_driver_end[];
 int
 main(void)
 {
+	//init input first, to select videomode
+	smpc_peripheral_init();
+
+	vdp_sync_vblank_out_set(rejoindre_vblank_out_handler, NULL);
+
+	//selecting videomode for the entire game
+	videomode_select(&controller);
 	//init video
-	video_screen_mode_t screenMode =
+	/*video_screen_mode_t screenMode =
 	{
 		.scanmode = VIDEO_SCANMODE_480P,
 		.x_res = VIDEO_X_RESOLUTION_320,
@@ -39,11 +47,7 @@ main(void)
 	};
 	
 	video_init(screenMode,BITMAP_MODE_256_COLORS);
-	video_vdp2_set_cycle_patterns_nbg_bmp(screenMode);
-
-	vdp_sync_vblank_out_set(rejoindre_vblank_out_handler, NULL);
-
-	smpc_peripheral_init();
+	video_vdp2_set_cycle_patterns_nbg_bmp(screenMode);*/
 
 	adpcm_load_driver(asset_sound_driver, asset_sound_driver_end - asset_sound_driver);
 

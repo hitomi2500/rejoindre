@@ -436,7 +436,9 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
 {
     uint8_t drawarea[40*30];
     tga_copy = tga;
-    srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
+    srand((((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
+    if (0 == rand()) 
+        srand(100500); //bad emu
     vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
 
     //loading sound effects into sound ram, reserving space for 64 sounds 
@@ -857,11 +859,7 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     for (int i = 0; i<32*20; i++)
         *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+0x2000+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
-    //TODO: sounds for link, fuse, grab, release, can't grab
-
     //TODO :end battle message
-
-    //TODO : 480i support
 
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
     memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));

@@ -12,6 +12,7 @@ BUILTIN_ASSETS+= \
 	assets/adp68k.bin;asset_sound_driver \
 	assets/BITMAP.TGA;asset_bitmap_tga \
 	assets/BITMAP2.TGA;asset_bitmap2_tga \
+	assets/modesel.TGA;asset_modesel_tga \
 	assets/e_fuse.adp;e_fuse_adp \
 	assets/e_fuse_m.adp;e_fuse_m_adp \
 	assets/e_grab.adp;e_grab_adp \
@@ -30,7 +31,8 @@ SH_SRCS:= \
 	font_renderer.c \
 	video_vdp1.c \
 	video_vdp2.c \
-	video.c
+	video.c \
+	videomode_select.c
 
 SH_CFLAGS+= -Os -I. $(TGA_CFLAGS)
 SH_LDFLAGS+= $(TGA_LDFLAGS)

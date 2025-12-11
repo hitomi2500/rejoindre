@@ -330,14 +330,14 @@ void video_vdp2_init(video_screen_mode_t screen_mode, bitmap_mode_t bmp_mode)
                 bmp_format.bitmap_size = VDP2_SCRN_BITMAP_SIZE_1024X512;
             } else {
                 bmp_format.ccc = VDP2_SCRN_CCC_PALETTE_256;
-                bmp_format.bitmap_size = VDP2_SCRN_BITMAP_SIZE_1024X256;
+                bmp_format.bitmap_size = VDP2_SCRN_BITMAP_SIZE_512X512;
             }
-            bmp_format.palette_base = 0x800;
+            bmp_format.palette_base = 0;//using same palette as pieces, not 0x200;
             bmp_format.bitmap_base = VIDEO_VDP2_NBG0_CHPNDR_START;
             vdp2_scrn_bitmap_format_set(&bmp_format);
 
             //setup nbg1 in tile mode, because it is not used in normal bmp setup
-            memset(&cell_format, 0x00, sizeof(cell_format));
+            /*memset(&cell_format, 0x00, sizeof(cell_format));
             memset(&normal_map, 0x00, sizeof(normal_map));
             cell_format.scroll_screen = VDP2_SCRN_NBG1;
             cell_format.ccc = VDP2_SCRN_CCC_PALETTE_256;
@@ -348,9 +348,9 @@ void video_vdp2_init(video_screen_mode_t screen_mode, bitmap_mode_t bmp_mode)
             cell_format.palette_base = 0;
             cell_format.plane_size = VDP2_SCRN_PLANE_SIZE_2X1;
             normal_map.plane_a = VIDEO_VDP2_NBG1_PNDR_START;
-            vdp2_scrn_cell_format_set(&cell_format,&normal_map);
+            vdp2_scrn_cell_format_set(&cell_format,&normal_map);*/
 
-            vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG0 | VDP2_SCRN_DISPTP_NBG1);
+            vdp2_scrn_display_set(VDP2_SCRN_DISP_NBG0);// | VDP2_SCRN_DISPTP_NBG1);
 
             vdp2_scrn_reduction_set(VDP2_SCRN_NBG0,VDP2_SCRN_REDUCTION_NONE);
             vdp2_scrn_reduction_set(VDP2_SCRN_NBG1,VDP2_SCRN_REDUCTION_NONE);
@@ -358,8 +358,14 @@ void video_vdp2_init(video_screen_mode_t screen_mode, bitmap_mode_t bmp_mode)
             vdp2_scrn_reduction_x_set(VDP2_SCRN_NBG1, FIX16(1.0f));
             vdp2_scrn_reduction_y_set(VDP2_SCRN_NBG0, FIX16(1.0f));
             vdp2_scrn_reduction_y_set(VDP2_SCRN_NBG1, FIX16(1.0f));
-            vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG0 , FIX16(0.0f));
-            vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1 , FIX16(0.0f));	
+            //hacky hack
+            if (screen_mode.x_res_doubled) {
+                vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG0 , FIX16(-64.0f));
+                vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1 , FIX16(-64.0f));	
+            } else {
+                vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG0 , FIX16(0.0f));
+                vdp2_scrn_scroll_x_set(VDP2_SCRN_NBG1 , FIX16(0.0f));	
+            }
             vdp2_scrn_priority_set(VDP2_SCRN_NBG0, 3);
             vdp2_scrn_priority_set(VDP2_SCRN_NBG1, 5);
 
