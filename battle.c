@@ -774,6 +774,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
 
     //TODO :end battle message
 
+    //TODO : Propagate link check to entire group of the current tile
+
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
     memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
     memcpy(LWRAM(0x1200),pieces_link_array,sizeof(pieces_link_array));

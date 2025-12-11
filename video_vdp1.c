@@ -70,6 +70,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 0;
     _cmdt_list->cmdts[index].cmd_ya= 0;
@@ -84,6 +85,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 288;
     _cmdt_list->cmdts[index].cmd_ya= 0;
@@ -99,6 +101,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_zoom_set(&_cmdt_list->cmdts[index], VDP1_CMDT_ZOOM_POINT_NONE);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 1;
+    _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],pieces_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= 32;
     _cmdt_list->cmdts[index].cmd_ya= 120;
@@ -120,6 +123,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
         vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
         vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
         _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
+        _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
         vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],pieces_color_bank);//8bpp
         _cmdt_list->cmdts[index].cmd_xa= ((index-10)%10)*25 - 5;
         _cmdt_list->cmdts[index].cmd_ya= ((index-10)/10)*19 - 5;
@@ -139,6 +143,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
+    _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],system_color_bank);
     _cmdt_list->cmdts[index].cmd_xa= 100;
     _cmdt_list->cmdts[index].cmd_ya= 100;
@@ -153,6 +158,7 @@ void video_vdp1_init(video_screen_mode_t screen_mode)
     vdp1_cmdt_normal_sprite_set(&_cmdt_list->cmdts[index]);
     vdp1_cmdt_draw_mode_set(&_cmdt_list->cmdts[index], sprite_draw_mode);
     _cmdt_list->cmdts[index].cmd_draw_mode.trans_pixel_disable = 0;
+    _cmdt_list->cmdts[index].cmd_draw_mode.end_code_disable = 1;
     vdp1_cmdt_color_mode4_set(&_cmdt_list->cmdts[index],message_color_bank);//8bpp
     _cmdt_list->cmdts[index].cmd_xa= (320-256)/2;
     _cmdt_list->cmdts[index].cmd_ya= 180;
