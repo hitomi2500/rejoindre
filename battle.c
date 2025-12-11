@@ -427,18 +427,26 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
         *((uint8_t *)VDP2_VRAM_ADDR(2, i)) = rand();
     }
 
+    //load only 8 pixels to the right
+    for (int y=0;y<512;y++) {
+        for (int x=504;x<512;x++) {
+            *((uint8_t *)VDP2_VRAM_ADDR(0, y*512+x)) = (tga[18+256*3+y*512+x]);
+            *((uint8_t *)VDP2_VRAM_ADDR(2, y*512+x)) = (tga[18+256*3+y*512+x]);
+        }
+    }
+
+
 	rgb888_t _color  = {0,0,0,0};
 	for (int i = 0; i<256; i++)
     {
-        /*_color.r = tga[18+i*3+2]/2;
-        _color.g = tga[18+i*3+1]/2;
-        _color.b = tga[18+i*3+0]/2;
-        video_vdp2_set_palette_part(1, &_color, i, i);*/
         _color.r = tga[18+i*3+2];
         _color.g = tga[18+i*3+1];
         _color.b = tga[18+i*3+0];
         video_vdp2_set_palette_part(0, &_color, i, i);
     }
+    //replacing pink 0 color from TGA with black
+    _color.r =0; _color.g =0; _color.b =0;
+    video_vdp2_set_palette_part(0, &_color, 0, 0);
 
     //step 2 - generate random curve directions
     for (int y=0;y<GRID_SIZE_Y; y++) {
@@ -685,86 +693,89 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     } else {
         if (battle_cursor_history[5]) {
             //releasing grab button
-            //checking if sprite is placed correctly
-            int piece_x = (selected_piece%10);
-            int piece_y = (selected_piece/10);
-
-            int expected_x = piece_x*25+24;
-            int expected_y = piece_y*20-5;
-            
-            sprintf(draw_string,"%d",expected_x);
-            mr_rectangle_t rectangle = (mr_rectangle_t){0,0,32,20};
-            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-            for (int i = 0; i<32*20; i++)
-                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*20+i) = 16+*(uint8_t*)LWRAM(i*2+1);
-
-            sprintf(draw_string,"%d",expected_y);
-            rectangle = (mr_rectangle_t){0,0,32,20};
-            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-            for (int i = 0; i<32*20; i++)
-                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*40+i) = 16+*(uint8_t*)LWRAM(i*2+1);
-
-            sprintf(draw_string,"%d",pieces_x[selected_piece]);
-            rectangle = (mr_rectangle_t){0,0,32,20};
-            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-            for (int i = 0; i<32*20; i++)
-                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*60+i) = 16+*(uint8_t*)LWRAM(i*2+1);
-
-            sprintf(draw_string,"%d",pieces_y[selected_piece]);
-            rectangle = (mr_rectangle_t){0,0,32,20};
-            mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
-            for (int i = 0; i<32*20; i++)
-                *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*80+i) = 16+*(uint8_t*)LWRAM(i*2+1);
-
-
-            //checking for fuse, using mahnattan distance
-            int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
-            int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
-            if ( (abs_x < 5) && (abs_y < 5) ){
-                //if linked, fuse entire list
-                if (pieces_link_array[selected_piece]){
-                    for (int i=0;i<120;i++)
-                        if (pieces_link_array[i] == pieces_link_array[selected_piece]) {
-                            fuse_piece(i);
-                        }
-                } else {
-                    //fuse single tile
-                    fuse_piece(selected_piece);
-                }
-            }
-            else
+            if (selected_piece != -1) //only if piece was grabbed
             {
-                //fuse failed, checking for link, only neigbours, starting with top neighbour
-                if (selected_piece>10) 
-                    link_neigbour(selected_piece,selected_piece-10,0,-20);
-                //now checking bottom neighbour
-                if (selected_piece<110) 
-                    link_neigbour(selected_piece,selected_piece+10,0,20);
-                //left neighbour
-                if (selected_piece%10 > 0) 
-                    link_neigbour(selected_piece,selected_piece-1,-25,0);
-                //right neighbour
-                if (selected_piece%10 < 9) 
-                    link_neigbour(selected_piece,selected_piece+1,25,0);
-                //if we're in the link already, checking all our neigbougs too
-                if (pieces_link_array[selected_piece]) {
-                    for (int i=0;i<120;i++){
-                        if ( (selected_piece != i) && (pieces_link_array[selected_piece] ==  pieces_link_array[i]) ) {
-                            if (i>10) 
-                                link_neigbour(i,i-10,0,-20);
-                            //now checking bottom neighbour
-                            if (i<110) 
-                                link_neigbour(i,i+10,0,20);
-                            //left neighbour
-                            if (i%10 > 0) 
-                                link_neigbour(i,i-1,-25,0);
-                            //right neighbour
-                            if (i%10 < 9) 
-                                link_neigbour(i,i+1,25,0);
-                                }
+                //checking if sprite is placed correctly
+                int piece_x = (selected_piece%10);
+                int piece_y = (selected_piece/10);
+
+                int expected_x = piece_x*25+24;
+                int expected_y = piece_y*20-5;
+                
+                sprintf(draw_string,"%d",expected_x);
+                mr_rectangle_t rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*20+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+                sprintf(draw_string,"%d",expected_y);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*40+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+                sprintf(draw_string,"%d",pieces_x[selected_piece]);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*60+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+                sprintf(draw_string,"%d",pieces_y[selected_piece]);
+                rectangle = (mr_rectangle_t){0,0,32,20};
+                mcu_renderer_draw_text(mr, draw_string, font_pacifico_16,rectangle,mr_get_color(0x00007F),mr_get_color(0x000000));
+                for (int i = 0; i<32*20; i++)
+                    *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*80+i) = 16+*(uint8_t*)LWRAM(i*2+1);
+
+
+                //checking for fuse, using mahnattan distance
+                int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
+                int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
+                if ( (abs_x < 5) && (abs_y < 5) ){
+                    //if linked, fuse entire list
+                    if (pieces_link_array[selected_piece]){
+                        for (int i=0;i<120;i++)
+                            if (pieces_link_array[i] == pieces_link_array[selected_piece]) {
+                                fuse_piece(i);
+                            }
+                    } else {
+                        //fuse single tile
+                        fuse_piece(selected_piece);
                     }
                 }
-            }
+                else
+                {
+                    //fuse failed, checking for link, only neigbours, starting with top neighbour
+                    if (selected_piece>10) 
+                        link_neigbour(selected_piece,selected_piece-10,0,-20);
+                    //now checking bottom neighbour
+                    if (selected_piece<110) 
+                        link_neigbour(selected_piece,selected_piece+10,0,20);
+                    //left neighbour
+                    if (selected_piece%10 > 0) 
+                        link_neigbour(selected_piece,selected_piece-1,-25,0);
+                    //right neighbour
+                    if (selected_piece%10 < 9) 
+                        link_neigbour(selected_piece,selected_piece+1,25,0);
+                    //if we're in the link already, checking all our neigbougs too
+                    if (pieces_link_array[selected_piece]) {
+                        for (int i=0;i<120;i++){
+                            if ( (selected_piece != i) && (pieces_link_array[selected_piece] ==  pieces_link_array[i]) ) {
+                                if (i>10) 
+                                    link_neigbour(i,i-10,0,-20);
+                                //now checking bottom neighbour
+                                if (i<110) 
+                                    link_neigbour(i,i+10,0,20);
+                                //left neighbour
+                                if (i%10 > 0) 
+                                    link_neigbour(i,i-1,-25,0);
+                                //right neighbour
+                                if (i%10 < 9) 
+                                    link_neigbour(i,i+1,25,0);
+                                    }
+                        }
+                    }
+                }
+            } //only if piece was grabbed
             //releasing grab button
             selected_piece = -1;
             //restore cursor sprite in case it was different
@@ -785,8 +796,6 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
         *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+0x2000+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
     //TODO: sounds for link, fuse, grab, release, can't grab
-
-    //TODO :fix 4 pixel border
 
     //TODO :end battle message
 
