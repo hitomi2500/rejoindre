@@ -746,6 +746,24 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 //right neighbour
                 if (selected_piece%10 < 9) 
                     link_neigbour(selected_piece,selected_piece+1,25,0);
+                //if we're in the link already, checking all our neigbougs too
+                if (pieces_link_array[selected_piece]) {
+                    for (int i=0;i<120;i++){
+                        if ( (selected_piece != i) && (pieces_link_array[selected_piece] ==  pieces_link_array[i]) ) {
+                            if (i>10) 
+                                link_neigbour(i,i-10,0,-20);
+                            //now checking bottom neighbour
+                            if (i<110) 
+                                link_neigbour(i,i+10,0,20);
+                            //left neighbour
+                            if (i%10 > 0) 
+                                link_neigbour(i,i-1,-25,0);
+                            //right neighbour
+                            if (i%10 < 9) 
+                                link_neigbour(i,i+1,25,0);
+                                }
+                    }
+                }
             }
             //releasing grab button
             selected_piece = -1;
@@ -768,13 +786,9 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
 
     //TODO: sounds for link, fuse, grab, release, can't grab
 
-    //TODO: remove holes
-
     //TODO :fix 4 pixel border
 
     //TODO :end battle message
-
-    //TODO : Propagate link check to entire group of the current tile
 
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
     memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
