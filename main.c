@@ -22,6 +22,9 @@ int global_frame_count;
 
 smpc_peripheral_digital_t controller;
 
+extern uint8_t asset_sound_driver[];
+extern uint8_t asset_sound_driver_end[];
+
 int
 main(void)
 {
@@ -42,13 +45,7 @@ main(void)
 
 	smpc_peripheral_init();
 
-	//vdp1_sync_mode_set(VDP1_SYNC_MODE_ERASE_CHANGE);
-    //vdp1_sync_interval_set(2);
- 
-    /*tga_t tga;
-    int ret __unused;
-    ret = tga_read(&tga, asset_bitmap_tga);
-    assert(ret == TGA_FILE_OK);*/
+	adpcm_load_driver(asset_sound_driver, asset_sound_driver_end - asset_sound_driver);
 
 	battle_init(asset_bitmap_tga,asset_bitmap2_tga);
 

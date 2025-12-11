@@ -10,6 +10,13 @@
 #define GRID_SIZE_X 10
 #define GRID_SIZE_Y 12
 
+#define SOUND_EFFECT_GRAB 0
+#define SOUND_EFFECT_RELEASE 1
+#define SOUND_EFFECT_GRAB_FAIL 2
+#define SOUND_EFFECT_LINK 3
+#define SOUND_EFFECT_FUSE 4
+#define SOUND_EFFECT_FUSE_MULTIPLE 5
+
 //storing curves as bitmaps
 const int Horizontal_Curve_26[260] = {
     0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -59,6 +66,18 @@ int battle_cursor_tile_offset_y;
 
 extern uint8_t asset_cursor1_tga[];
 extern uint8_t asset_cursor2_tga[];
+extern uint8_t e_fuse_adp[];
+extern uint8_t e_fuse_adp_end[];
+extern uint8_t e_fuse_m_adp[];
+extern uint8_t e_fuse_m_adp_end[];
+extern uint8_t e_grab_adp[];
+extern uint8_t e_grab_adp_end[];
+extern uint8_t e_grab_f_adp[];
+extern uint8_t e_grab_f_adp_end[];
+extern uint8_t e_link_adp[];
+extern uint8_t e_link_adp_end[];
+extern uint8_t e_release_adp[];
+extern uint8_t e_release_adp_end[];
 
 int battle_cursor_history[16] = {0};
 
@@ -274,7 +293,7 @@ void mcu_renderer_draw_text(mr_t mr, char * string, const uint8_t * font, mr_rec
     mr_draw_utf8_text(&mr,(uint8_t *)string,&rect,&offset);
 }
 
-void link_neigbour(root,neigbour,link_x,link_y) {
+int link_neigbour(root,neigbour,link_x,link_y) {
                 //rendering debug info
             char draw_string[32];
             mr_t mr;
@@ -290,7 +309,7 @@ void link_neigbour(root,neigbour,link_x,link_y) {
     //if already linked, do not link again
     if ((pieces_link_array[root]) && 
         (pieces_link_array[root]==pieces_link_array[neigbour]))
-            return;
+            return 0;
     int abs_x = pieces_x[neigbour] - pieces_x[root];
     abs_x -= link_x;
     abs_x = (abs_x > 0) ? abs_x : -abs_x;
@@ -313,6 +332,7 @@ void link_neigbour(root,neigbour,link_x,link_y) {
     //using mahnattan distance
     if ( (abs_x < 5) && (abs_y < 5) ) {
         //it's a link, shifting neighbour to fit!
+        adcpm_play_sample(2,SOUND_EFFECT_LINK);
         int neighbour_snap_offset_x = pieces_x[neigbour];
         int neighbour_snap_offset_y = pieces_y[neigbour];
         pieces_x[neigbour] = pieces_x[root]+link_x;
@@ -365,7 +385,9 @@ void link_neigbour(root,neigbour,link_x,link_y) {
             pieces_link_array[root] = pieces_link_groups;
             pieces_link_array[neigbour] = pieces_link_groups;
         }
+        return 1;
     }
+    return 0;
 }
 
 void fuse_piece(int selected_piece)
@@ -416,6 +438,27 @@ void battle_init(uint8_t * tga, uint8_t * tga_half)
     tga_copy = tga;
     srand(100500);//vdp2_tvmd_vcount_get());//(((uint32_t)vdp2_tvmd_hcount_get())<<16) | (vdp2_tvmd_vcount_get()));
     vdp1_vram_partitions_get(&battle_vdp1_vram_partitions);
+
+    //loading sound effects into sound ram, reserving space for 64 sounds 
+    int sound_ram_offset = 0x2000 + 64*sizeof(uint32_t);
+    //0 = fuse
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_FUSE,e_fuse_adp,e_fuse_adp_end-e_fuse_adp);
+    sound_ram_offset+=e_fuse_adp_end-e_fuse_adp;
+    //1 - fuse multiple
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_FUSE_MULTIPLE,e_fuse_m_adp,e_fuse_m_adp_end-e_fuse_m_adp);
+    sound_ram_offset+=e_fuse_m_adp_end-e_fuse_m_adp;
+    //2 - grab
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_GRAB,e_grab_adp,e_grab_adp_end-e_grab_adp);
+    sound_ram_offset+=e_grab_adp_end-e_grab_adp;
+    //3 - grab failed
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_GRAB_FAIL,e_grab_f_adp,e_grab_f_adp_end-e_grab_f_adp);
+    sound_ram_offset+=e_grab_f_adp_end-e_grab_f_adp;
+    //4 = link
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_LINK,e_link_adp,e_link_adp_end-e_link_adp);
+    sound_ram_offset+=e_link_adp_end-e_link_adp;
+    //5 - release
+    adpcm_add_sample(sound_ram_offset,SOUND_EFFECT_RELEASE,e_release_adp,e_release_adp_end-e_release_adp);
+    sound_ram_offset+=e_release_adp_end-e_release_adp;
 
     //step 1 - DO NOT load tga into VDP2 megaplane, FILL WITH RANDOM SHIT!
     //memcpy ((void *)VDP2_VRAM_ADDR(0, 0x00000), &(tga[18+256*3]),512*256);
@@ -652,8 +695,11 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
             }
             if (-1 == selected_piece) {
                 //no tile found, changing cursor to no go
+                adcpm_play_sample(2,SOUND_EFFECT_GRAB_FAIL);
                 memcpy ((void *)(battle_vdp1_vram_partitions.texture_base+0x2a000), &(asset_cursor2_tga[18+3*3]),32*32);
             } else {
+                // grab sucessful, play effect on channel 2
+                adcpm_play_sample(2,SOUND_EFFECT_GRAB);
                 //piece found, hiding cursor
                 _cmdt_list->cmdts[200].cmd_xa = -100;
                 _cmdt_list->cmdts[200].cmd_ya = -100;
@@ -727,18 +773,23 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                     *(uint8_t*)(battle_vdp1_vram_partitions.texture_base+32*80+i) = 16+*(uint8_t*)LWRAM(i*2+1);
 
 
+                int normal_release = 1;
+                
                 //checking for fuse, using mahnattan distance
                 int abs_x = (expected_x > pieces_x[selected_piece]) ? (expected_x - pieces_x[selected_piece]) : (pieces_x[selected_piece] - expected_x);
                 int abs_y = (expected_y > pieces_y[selected_piece]) ? (expected_y - pieces_y[selected_piece]) : (pieces_y[selected_piece] - expected_y);
                 if ( (abs_x < 5) && (abs_y < 5) ){
+                    normal_release = 0;
                     //if linked, fuse entire list
                     if (pieces_link_array[selected_piece]){
+                        adcpm_play_sample(2,SOUND_EFFECT_FUSE_MULTIPLE);
                         for (int i=0;i<120;i++)
                             if (pieces_link_array[i] == pieces_link_array[selected_piece]) {
                                 fuse_piece(i);
                             }
                     } else {
                         //fuse single tile
+                        adcpm_play_sample(2,SOUND_EFFECT_FUSE);
                         fuse_piece(selected_piece);
                     }
                 }
@@ -746,35 +797,46 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
                 {
                     //fuse failed, checking for link, only neigbours, starting with top neighbour
                     if (selected_piece>10) 
-                        link_neigbour(selected_piece,selected_piece-10,0,-20);
+                        if (link_neigbour(selected_piece,selected_piece-10,0,-20))
+                            normal_release = 0;
                     //now checking bottom neighbour
                     if (selected_piece<110) 
-                        link_neigbour(selected_piece,selected_piece+10,0,20);
+                        if (link_neigbour(selected_piece,selected_piece+10,0,20))
+                            normal_release = 0;
                     //left neighbour
                     if (selected_piece%10 > 0) 
-                        link_neigbour(selected_piece,selected_piece-1,-25,0);
+                        if (link_neigbour(selected_piece,selected_piece-1,-25,0))
+                            normal_release = 0;
                     //right neighbour
                     if (selected_piece%10 < 9) 
-                        link_neigbour(selected_piece,selected_piece+1,25,0);
+                        if (link_neigbour(selected_piece,selected_piece+1,25,0))
+                            normal_release = 0;
                     //if we're in the link already, checking all our neigbougs too
                     if (pieces_link_array[selected_piece]) {
                         for (int i=0;i<120;i++){
                             if ( (selected_piece != i) && (pieces_link_array[selected_piece] ==  pieces_link_array[i]) ) {
                                 if (i>10) 
-                                    link_neigbour(i,i-10,0,-20);
+                                    if (link_neigbour(i,i-10,0,-20))
+                                        normal_release = 0;
                                 //now checking bottom neighbour
                                 if (i<110) 
-                                    link_neigbour(i,i+10,0,20);
+                                    if (link_neigbour(i,i+10,0,20))
+                                        normal_release = 0;
                                 //left neighbour
                                 if (i%10 > 0) 
-                                    link_neigbour(i,i-1,-25,0);
+                                    if (link_neigbour(i,i-1,-25,0))
+                                        normal_release = 0;
                                 //right neighbour
                                 if (i%10 < 9) 
-                                    link_neigbour(i,i+1,25,0);
+                                    if (link_neigbour(i,i+1,25,0))
+                                        normal_release = 0;
                                     }
                         }
                     }
-                }
+                } 
+                //normal release
+                if (normal_release)
+                    adcpm_play_sample(2,SOUND_EFFECT_RELEASE);
             } //only if piece was grabbed
             //releasing grab button
             selected_piece = -1;
@@ -798,6 +860,8 @@ void battle_scheduler(smpc_peripheral_digital_t * controller)
     //TODO: sounds for link, fuse, grab, release, can't grab
 
     //TODO :end battle message
+
+    //TODO : 480i support
 
     memcpy(LWRAM(0x1000),pieces_game_to_vdp1,sizeof(pieces_game_to_vdp1));
     memcpy(LWRAM(0x1100),pieces_vdp1_to_game,sizeof(pieces_vdp1_to_game));
